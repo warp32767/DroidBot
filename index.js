@@ -37,9 +37,9 @@ async function setupEmbed() {
 
     icon = new AttachmentBuilder(`./images/ccp.png`);
     const embed = new EmbedBuilder()
-        .setTitle(`Mao Zedong \`${version}\``)
+        .setTitle(`DroidBot \`${version}\``)
         .setColor('#ff0000')
-        .setThumbnail(`attachment://ccp.png`)
+        .setThumbnail(`attachment://droid.png`)
         .setFooter({ text: `By warp32767` });
 
     if (remoteCommit == localCommit.slice(0,7)) {
