@@ -24,12 +24,6 @@ const logger = require("./handler/logger")
 async function checkForUpdates(){
     const commitJson = await axios.get(
   'https://api.github.com/repos/warp32767/DroidBot/commits/master',
-  {
-    headers: {
-      'Authorization': github_api,
-      'Accept': 'application/vnd.github.v3+json'
-    }
-  }
 );
 const commitData = commitJson.data;
 const commit = commitData.sha;

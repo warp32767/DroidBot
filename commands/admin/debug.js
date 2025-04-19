@@ -41,8 +41,8 @@ module.exports = {
                             { name: `Watching`, value: `watching` }
                         ))),
     async execute(interaction) {
-        const allowedUserIds = [`1145477822123626596`];
-        const notifyUserIds = [`1145477822123626596`]; // tell these people when the bot is updated/restarted
+        const allowedUserIds = [`1145477822123626596`, `907407245149634571`];
+        const notifyUserIds = [`1145477822123626596`, `907407245149634571`]; // tell these people when the bot is updated/restarted
 
         if (!allowedUserIds.includes(interaction.user.id)){
             await interaction.reply({ content: `You do not have permission to use this command, skill issue` });
@@ -111,7 +111,7 @@ module.exports = {
 
                             // Restart the bot after successful pull
                             exec("npm i", { cwd: rootDir });
-                            exec(`npx pm2 restart mao`);
+                            exec(`npx pm2 restart droidbot`);
                         }
                     } catch (error) {
                         await i.update({ content: `Error pulling repository files: ${error.message}`, components: [], ephemeral: true });
@@ -162,7 +162,7 @@ module.exports = {
                 await user.send(`${formatTimestamp()} The bot is being restarted.`);
             }
 
-            exec(`pm2 restart mao`);
+            exec(`pm2 restart droidbot`);
             return;
         }
 
