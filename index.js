@@ -55,7 +55,7 @@ async function setupEmbed() {
         embed.setDescription(`Hello droiders!\n\n**Please Update to Latest Version**\nLocal Version: \`${localCommit.slice(0,7)}\`\nLatest Version: \`${remoteCommit}\``);
     }
 
-    const channelId = '1363186965792555019';
+    const channelId = '620122073074892811';
 
     const channel = client.channels.cache.get(channelId);
     if (channel) {
