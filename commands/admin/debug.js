@@ -45,7 +45,7 @@ module.exports = {
         const notifyUserIds = [`1145477822123626596`, `907407245149634571`]; // tell these people when the bot is updated/restarted
 
         if (!allowedUserIds.includes(interaction.user.id)){
-            await interaction.reply({ content: `You do not have permission to use this command, skill issue` });
+            await interaction.reply({ content: `You do not have permission to use this command, skill issue.`, ephemeral: true });
             return;
         }
 
