@@ -3,13 +3,13 @@ const { ActionRowBuilder, EmbedBuilder, AttachmentBuilder, StringSelectMenuBuild
 const axios = require('axios');
 const cheerio = require('cheerio');
 const NodeCache = require('node-cache');
-const cache = new NodeCache({ stdTTL: 3600, checkperiod: 120 });
+const cache = new NodeCache({ stdTTL: 604800, checkperiod: 120 });
 
 async function searchGSMArena(query) {
     const cachedResults = cache.get(query);
     if (cachedResults) {
-        return cachedResults;
         console.log('Using cached results');
+        return cachedResults
     }
     
     try {
