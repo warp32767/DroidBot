@@ -14,7 +14,7 @@ async function scrapeSocList(query) {
         "rejectUnauthorized": false,
         url: "http://phonedb.net/index.php?m=processor&s=list",
         params: bodyFormData,
-        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36' },
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.6788.76 Safari/537.36' },
     });
 
 
@@ -36,7 +36,7 @@ async function scrapeSocList(query) {
 async function scrapeSoCDetails(url) {
     const response = await axios.get(url, {
         headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.6788.76 Safari/537.36'
         }
     });
     const html = response.data;
@@ -58,7 +58,7 @@ async function scrapeSoCDetails(url) {
 async function getSocImage(url) {
     const response = await axios.get(url, {
         headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.6788.76 Safari/537.36'
         }
     });
     const html = response.data;
