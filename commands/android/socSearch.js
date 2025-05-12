@@ -1,30 +1,21 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
-const http = require('http');
-const https = require('https');
 const NodeCache = require('node-cache');
 
-// Create HTTP/HTTPS agents with keep-alive enabled
-const httpAgent = new http.Agent({ keepAlive: true });
-const httpsAgent = new https.Agent({ keepAlive: true });
-
-// Create an Axios instance with the custom agents and headers
+// Create an Axios instance with headers and a timeout
 const axiosInstance = axios.create({
-    httpAgent,
-    httpsAgent,
     headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.6788.76 Safari/537.36'
     },
     timeout: 10000 // set an optional timeout
 });
 
-// Create caches (TTL in seconds, here 300 seconds equals 5 minutes)
+// Create caches (TTL in seconds, here 86400 seconds equals 24 hours)
 const searchCache = new NodeCache({ stdTTL: 86400 });
 const detailsCache = new NodeCache({ stdTTL: 86400 });
 const imageCache = new NodeCache({ stdTTL: 86400 });
 
 async function scrapeSocList(query) {
-    // Check if the query result is cached
     const cached = searchCache.get(query);
     if (cached) return cached;
 
@@ -34,7 +25,6 @@ async function scrapeSocList(query) {
     bodyFormData.append('search_exp', query);
     bodyFormData.append('search_header', '');
 
-    // Post request using the Axios instance
     const response = await axiosInstance({
         method: "post",
         url,
@@ -53,13 +43,11 @@ async function scrapeSocList(query) {
         results.push({ name, link });
     });
 
-    // Cache the result for future queries
     searchCache.set(query, results);
     return results;
 }
 
 async function scrapeSoCDetails(url) {
-    // Check if details are cached
     const cached = detailsCache.get(url);
     if (cached) return cached;
 
@@ -81,7 +69,6 @@ async function scrapeSoCDetails(url) {
 }
 
 async function getSocImage(url) {
-    // Check if image is cached
     const cached = imageCache.get(url);
     if (cached) return cached;
 
@@ -104,5 +91,5 @@ module.exports = {
     scrapeSocList,
     scrapeSoCDetails,
     getSocImage,
-    axiosInstance  // exported for potential use in parallel requests if needed
+    axiosInstance
 };
