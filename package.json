@@ -1,6 +1,6 @@
 {
   "name": "droidbot",
-  "version": "0.0.1",
+  "version": "1.3.0",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -10,6 +10,7 @@
   "license": "",
   "description": "Discord bot created in node.js",
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "@ptkdev/logger": "^1.8.0",
     "axios": "^1.8.4",
     "cheerio": "^1.0.0",

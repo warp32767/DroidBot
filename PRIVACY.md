@@ -38,7 +38,7 @@ When required by law.
 
 ## 5. Your Rights
 
-5.1 You can request access, modification, or deletion of your data by contacting us on Discord at @sdrlp or @echo.the.lynx
+5.1 You can request access, modification, or deletion of your data by contacting me on Discord at @sdrlp
 
 ## 6. Data Security
 
