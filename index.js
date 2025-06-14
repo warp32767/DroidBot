@@ -3,7 +3,7 @@ const { Client, Collection, GatewayIntentBits, EmbedBuilder, ActivityType, Attac
 const axios = require('axios');
 const fs = require('node:fs');
 const { loadEvents } = require("./handler/events");
-const { token, github_api } = require('./config.json');
+const { token } = require('./config.json');
 const { version } = require('./package.json');
 const { loadCommands } = require("./handler/slashCommands");
 const { deployCommands } = require("./handler/deployCommands");

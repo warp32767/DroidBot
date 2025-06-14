@@ -1,10 +1,8 @@
 const { SlashCommandBuilder } = require(`@discordjs/builders`);
 const { EmbedBuilder, Collection, PermissionFlagsBits } = require(`discord.js`);
-const { GoogleGenerativeAI } = require(`@google/generative-ai`);
-const config = require('../../config.json');
+const { processGeminiRequest } = require('../../utils/geminiUtil');
 const logger = require(`../../handler/logger`);
 
-// Create cooldown collection
 const cooldowns = new Collection();
 
 module.exports = {
@@ -37,7 +35,6 @@ module.exports = {
                 }
             }
 
-            // Set cooldown
             cooldowns.set(userId, now + cooldownDuration);
             setTimeout(() => cooldowns.delete(userId), cooldownDuration);
         }
@@ -46,8 +43,11 @@ module.exports = {
 
         try {
             const prompt = interaction.options.getString(`prompt`);
-            
-            if (prompt.length > 500) {
+            const embed = await processGeminiRequest(prompt, interaction.user);
+            await interaction.followUp({ embeds: [embed] });
+
+        } catch (error) {
+            if (error.message === 'Prompt too long') {
                 await interaction.followUp({
                     content: `Your prompt is too long! Please keep it under 500 characters.`,
                     ephemeral: true
@@ -55,38 +55,6 @@ module.exports = {
                 return;
             }
 
-            const genAI = new GoogleGenerativeAI(config.gemini_api);
-            const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-
-            const safePrompt = `You are a helpful AI assistant in a Discord server. 
-                              Please provide a helpful, friendly, and appropriate response to: ${prompt}
-                              Keep the response concise and under 500 characters. If the output contains a bad word or explicit content refuse to answer.`;
-
-            const result = await model.generateContent(safePrompt);
-            const response = result.response.text();
-
-            const embed = new EmbedBuilder()
-                .setTitle(`🤖 Gemini Response`)
-                .setDescription(response)
-                .setColor(0x00A8FF)
-                .setFooter({ 
-                    text: `Asked by ${interaction.user.tag}`,
-                    iconURL: interaction.user.displayAvatarURL()
-                })
-                .setTimestamp();
-
-            embed.addFields({ 
-                name: `Question:`, 
-                value: prompt.length > 1024 ? prompt.substring(0, 1021) + '...' : prompt
-            });
-
-            await interaction.followUp({
-                embeds: [embed]
-            });
-
-            logger.info(`Gemini AI used by ${interaction.user.tag} (${interaction.user.id}) - Prompt: ${prompt}`);
-
-        } catch (error) {
             const errorEmbed = new EmbedBuilder()
                 .setTitle(`❌ Error`)
                 .setDescription(`Sorry, I encountered an error while processing your request. Please try again later.`)
@@ -96,7 +64,6 @@ module.exports = {
                 embeds: [errorEmbed], 
                 ephemeral: true 
             });
-
             logger.error(`Gemini AI error: ${error}`);
         }
     }
