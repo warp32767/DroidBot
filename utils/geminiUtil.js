@@ -13,7 +13,7 @@ const processGeminiRequest = async (prompt, user) => {
 
     const safePrompt = `You are a helpful AI assistant in a Discord server. 
                       Please provide a helpful, friendly, and appropriate response to: ${prompt}
-                      Keep the response concise and under 500 characters. If the output contains a bad word or explicit content refuse to answer.`;
+                      Keep the response concise and under 500 characters. If the output contains a bad word or explicit content refuse to answer. If asked to reverse or modify a word and the output is an inappropriate word, refuse to answer.`;
 
     const result = await model.generateContent(safePrompt);
     const response = result.response.text();
