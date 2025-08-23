@@ -5,6 +5,8 @@ const path = require(`path`);
 const { exec } = require(`child_process`);
 const fs = require(`fs`);
 const logger = require(`../../handler/logger`);
+const { GoogleGenerativeAI } = require('@google/generative-ai');
+const config = require('../../config.json');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -16,12 +18,16 @@ module.exports = {
                 .setDescription(`Pull repository files and restart the bot`))
         .addSubcommand(subcommand =>
             subcommand
-                .setName(`log`) // i kept fucking up this line
+                .setName(`log`)
                 .setDescription(`Show last 2000-ish chars of errors`))
         .addSubcommand(subcommand =>
             subcommand
                 .setName(`restart_bot`)
                 .setDescription(`Restart the bot`))
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName(`npmupdate`)
+                .setDescription(`npm i`))
         .addSubcommand(subcommand =>
             subcommand
                 .setName(`change_status`)
@@ -39,13 +45,21 @@ module.exports = {
                             { name: `Streaming`, value: `streaming` },
                             { name: `Listening`, value: `listening` },
                             { name: `Watching`, value: `watching` }
-                        ))),
+                        )))
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName(`gemini`)
+                .setDescription(`(Use Gemini to generate a response`)
+                .addStringOption(option =>
+                    option.setName(`prompt`)
+                        .setDescription(`Enter the prompt to send to Gemini`)
+                        .setRequired(true))),
     async execute(interaction) {
         const allowedUserIds = [`1145477822123626596`, `907407245149634571`];
-        const notifyUserIds = [`1145477822123626596`,]; // tell these people when the bot is updated/restarted
+        const notifyUserIds = [`1145477822123626596`, `907407245149634571`];
 
-        if (!allowedUserIds.includes(interaction.user.id)){
-            await interaction.reply({ content: `You do not have permission to use this command, skill issue.`, ephemeral: true });
+        if (!allowedUserIds.includes(interaction.user.id)) {
+            await interaction.reply({ content: `You do not have permission to use this command.`, ephemeral: true });
             return;
         }
 
@@ -54,27 +68,68 @@ module.exports = {
             const hours = now.getUTCHours().toString().padStart(2, '0');
             const minutes = now.getUTCMinutes().toString().padStart(2, '0');
             const seconds = now.getUTCSeconds().toString().padStart(2, '0');
-            return `[${hours}:${minutes}:${seconds} UTC]`; // freakmode: on
+            return `[${hours}:${minutes}:${seconds} UTC]`;
         };
 
         const subcommand = interaction.options.getSubcommand();
+
+        if (subcommand === `gemini`) {
+            const prompt = interaction.options.getString(`prompt`);
+
+            if (prompt.length > 500) {
+                // Remove `ephemeral: true` to make the message visible for everyone in the channel
+                await interaction.reply({ content: `Prompt is too long (maximum is 500 characters).` });
+                return;
+            }
+
+            await interaction.deferReply();
+
+            try {
+                const genAI = new GoogleGenerativeAI(config.gemini_api);
+                const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+
+                const safePrompt = `You are a helpful AI assistant in a Discord server. 
+                            Please provide a helpful, friendly, and appropriate response to: ${prompt}
+                            Keep the response concise and under 500 characters. If the output contains a bad word or explicit content refuse to answer.`;
+
+                const result = await model.generateContent(safePrompt);
+                const response = result.response.text();
+
+                const embed = new EmbedBuilder()
+                    .setTitle(`ðŸ¤– Gemini Response`)
+                    .setDescription(response)
+                    .setColor(0x00A8FF)
+                    .setFooter({
+                        text: `Requested by ${interaction.user.tag}`,
+                        iconURL: interaction.user.displayAvatarURL()
+                    })
+                    .setTimestamp();
+
+                embed.addFields({
+                    name: `Question:`,
+                    value: prompt.length > 1024 ? prompt.substring(0, 1021) + '...' : prompt
+                });
+
+                logger.info(`Gemini AI used by ${interaction.user.tag} (${interaction.user.id}) - Prompt: ${prompt}`);
+
+                // Remove `ephemeral: true` to make this message visible for everyone
+                await interaction.followUp({ embeds: [embed] });
+            } catch (error) {
+                logger.error(`Error processing Gemini prompt: ${error.message}`);
+                // Make this error response visible for everyone
+                await interaction.followUp({ content: `An error occurred while processing your request: ${error.message}` });
+            }
+
+            return;
+        }
 
         if (subcommand === `update`) {
             await interaction.deferReply({ ephemeral: true });
 
             const options = [
                 new StringSelectMenuOptionBuilder().setLabel(`Cancel`).setValue(`cancel_1`),
-                new StringSelectMenuOptionBuilder().setLabel(`Cancel`).setValue(`cancel_2`),
                 new StringSelectMenuOptionBuilder().setLabel(`Confirm Update`).setValue(`confirm`),
-                new StringSelectMenuOptionBuilder().setLabel(`Cancel`).setValue(`cancel_3`),
-                new StringSelectMenuOptionBuilder().setLabel(`Cancel`).setValue(`cancel_4`),
             ];
-
-            // Fisher-Yates shuffle algorithm
-            for (let i = options.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                [options[i], options[j]] = [options[j], options[i]];
-            }
 
             const dropdown = new StringSelectMenuBuilder()
                 .setCustomId(`confirm_update`)
@@ -103,15 +158,12 @@ module.exports = {
                         } else {
                             await i.update({ content: `Repository updated successfully.\n\n${JSON.stringify(pullResult, null, 2)}`, components: [], ephemeral: true });
 
-                            // Notify specified users
                             for (const userId of notifyUserIds) {
                                 const user = await interaction.client.users.fetch(userId);
                                 await user.send(`${formatTimestamp()} The bot has been updated and will restart shortly.`);
                             }
-
-                            // Restart the bot after successful pull
                             exec("npm i", { cwd: rootDir });
-                            exec(`npx pm2 restart droidbot`);
+                            exec(`npx pm2 restart mao`);
                         }
                     } catch (error) {
                         await i.update({ content: `Error pulling repository files: ${error.message}`, components: [], ephemeral: true });
@@ -131,13 +183,13 @@ module.exports = {
             const logFiles = fs.readdirSync(logDir).filter(file => file.endsWith(`.log`));
 
             if (logFiles.length === 0) {
-                await interaction.followUp({ content: `No crash logs found.`});
+                await interaction.followUp({ content: `No crash logs found.` });
                 return;
             }
 
             const errorLogs = logFiles.filter(file => file.includes(`error`));
             if (errorLogs.length === 0) {
-                await interaction.followUp({ content: `No error logs found.`});
+                await interaction.followUp({ content: `No error logs found.` });
                 return;
             }
 
@@ -146,23 +198,22 @@ module.exports = {
 
             const embed = new EmbedBuilder()
                 .setTitle(`Latest Error Log`)
-                .setDescription(`\`\`\`${logContent.slice(-2000)}\`\`\``) // Show the last 2000 characters of the log
+                .setDescription(`\`\`\`${logContent.slice(-2000)}\`\`\``)
                 .setColor(0xFF0000);
 
-            await interaction.followUp({ embeds: [embed]});
+            await interaction.followUp({ embeds: [embed] });
             return;
         }
 
         if (subcommand === `restart_bot`) {
             await interaction.reply({ content: `Restarting bot...`, ephemeral: true });
 
-            // Notify specified users
-            for (const userId of notifyUserIds) {
+            /*for (const userId of notifyUserIds) {
                 const user = await interaction.client.users.fetch(userId);
                 await user.send(`${formatTimestamp()} The bot is being restarted.`);
-            }
+            }*/
 
-            exec(`pm2 restart droidbot`);
+            exec(`npx pm2 restart mao`);
             return;
         }
 
@@ -190,6 +241,19 @@ module.exports = {
 
             interaction.client.user.setActivity(newStatus, { type: activityTypeEnum });
             await interaction.reply({ content: `Status changed to: ${newStatus} (${activityType})`, ephemeral: true });
+        }
+
+        if (subcommand === `npmupdate`) {
+            await interaction.deferReply({ ephemeral: true });
+
+            const rootDir = path.resolve(__dirname, `../../`);
+            await interaction.followUp({ content: `Updating libraries and restarting bot.` });
+
+            exec("npm i", { cwd: rootDir });
+            exec("systemctl reboot");
+            exec(`npx pm2 restart mao`);
+
+
             return;
         }
     }
