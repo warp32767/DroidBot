@@ -18,7 +18,7 @@ const gpioPin = 4;
 async function updateSensorActivity(client) {
     try {
         const { temperature, humidity } = await sensor.read(sensorType, gpioPin);
-        const activityMessage = `Chassis Temp: ${temperature.toFixed(1)}°C, Humidity: ${humidity.toFixed(1)}%`;
+        const activityMessage = `Case Temp: ${temperature.toFixed(1)}°C, Humidity: ${humidity.toFixed(1)}%`;
 
         // should work, if it doesn't i'm killing myself
         client.user.setActivity(activityMessage, { type: ActivityType.Watching });
