@@ -163,7 +163,7 @@ module.exports = {
                                 await user.send(`${formatTimestamp()} The bot has been updated and will restart shortly.`);
                             }
                             exec("npm i", { cwd: rootDir });
-                            exec(`npx pm2 restart mao`);
+                            exec(`npx pm2 restart droidbot`);
                         }
                     } catch (error) {
                         await i.update({ content: `Error pulling repository files: ${error.message}`, components: [], ephemeral: true });
@@ -213,7 +213,7 @@ module.exports = {
                 await user.send(`${formatTimestamp()} The bot is being restarted.`);
             }*/
 
-            exec(`npx pm2 restart mao`);
+            exec(`npx pm2 restart droidbot`);
             return;
         }
 
@@ -241,20 +241,6 @@ module.exports = {
 
             interaction.client.user.setActivity(newStatus, { type: activityTypeEnum });
             await interaction.reply({ content: `Status changed to: ${newStatus} (${activityType})`, ephemeral: true });
-        }
-
-        if (subcommand === `npmupdate`) {
-            await interaction.deferReply({ ephemeral: true });
-
-            const rootDir = path.resolve(__dirname, `../../`);
-            await interaction.followUp({ content: `Updating libraries and restarting bot.` });
-
-            exec("npm i", { cwd: rootDir });
-            exec("systemctl reboot");
-            exec(`npx pm2 restart mao`);
-
-
-            return;
         }
     }
 };
