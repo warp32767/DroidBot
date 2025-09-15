@@ -8,6 +8,28 @@ const { version } = require('./package.json');
 const { loadCommands } = require("./handler/slashCommands");
 const { deployCommands } = require("./handler/deployCommands");
 
+// Import sensor library at the top
+const sensor = require("node-dht-sensor").promises;
+
+// Configure the sensor (type 22 = DHT22, GPIO pin = e.g., 4)
+const sensorType = 22; // 22 = DHT22, 11 = DHT11
+const gpioPin = 4;     // Adjust to the GPIO pin you connected the sensor to
+
+// Function to read from the sensor and update bot activity
+async function updateSensorActivity(client) {
+    try {
+        const { temperature, humidity } = await sensor.read(sensorType, gpioPin);
+        const activityMessage = `Temp: ${temperature.toFixed(1)}°C, Humidity: ${humidity.toFixed(1)}%`;
+
+        // Update bot's presence
+        client.user.setActivity(activityMessage, { type: ActivityType.Watching });
+        console.log(`Updated bot activity to: ${activityMessage}`);
+
+    } catch (err) {
+        console.error("Failed to read sensor:", err);
+    }
+}
+
 const client = new Client({ intents: 46791 });
 client.commands = new Collection();
 
@@ -62,17 +84,21 @@ async function setupEmbed() {
 
 let guildIds = [];
 
+// Modify the "ready" event listener to include the periodic activity update
 client.on("ready", async () => {
     logger.info(`Logged in as ${client.user.tag}!`);
     client.user.setActivity('on the droid', { type: ActivityType.Playing });
 
+    // Call setupEmbed (existing functionality)
     await setupEmbed();
 
+    // Fetch and log connected guilds
     guildIds = await client.guilds.cache.map(guild => guild.id);
-    logger.info(`Connected to guilds: ${guildIds}`)
-
+    logger.info(`Connected to guilds: ${guildIds}`);
     await deployCommands(client, guildIds);
 
+    // Start updating the sensor data in activity every 30 seconds
+    setInterval(() => updateSensorActivity(client), 30000); // 30-second interval
 });
 
 // He sees everything
