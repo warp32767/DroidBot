@@ -13,7 +13,7 @@ const sensor = require("node-dht-sensor").promises;
 
 // Configure the sensor (type 22 = DHT22, GPIO pin = e.g., 4)
 const sensorType = 22; // 22 = DHT22, 11 = DHT11
-const gpioPin = 4;     // Adjust to the GPIO pin you connected the sensor to
+const gpioPin = 4; // Adjust to the GPIO pin you connected the sensor to
 
 // Function to read from the sensor and update bot activity
 async function updateSensorActivity(client) {
@@ -24,7 +24,6 @@ async function updateSensorActivity(client) {
         // Update bot's presence
         client.user.setActivity(activityMessage, { type: ActivityType.Watching });
         console.log(`Updated bot activity to: ${activityMessage}`);
-
     } catch (err) {
         console.error("Failed to read sensor:", err);
     }
@@ -35,40 +34,37 @@ client.commands = new Collection();
 
 const rest = new REST({ version: "10" }).setToken(token);
 
-// load commands
+// Load commands and events
 loadCommands(client);
 loadEvents(client);
 
 // Logging
-const logger = require("./handler/logger")
+const logger = require("./handler/logger");
 
-// check for updates on startup
-async function checkForUpdates(){
-    const commitJson = await axios.get(
-  'https://api.github.com/repos/warp32767/DroidBot/commits/master',
-);
-const commitData = commitJson.data;
-const commit = commitData.sha;
-return commit.slice(0, 7);
+// Check for updates on startup
+async function checkForUpdates() {
+    const commitJson = await axios.get('https://api.github.com/repos/warp32767/DroidBot/commits/master');
+    const commitData = commitJson.data;
+    const commit = commitData.sha;
+    return commit.slice(0, 7);
 }
 
-
+// Setup embed function
 async function setupEmbed() {
     const remoteCommit = await checkForUpdates();
 
     let localCommit = await fs.readFileSync('.git/refs/heads/master', 'utf8');
-
-    icon = new AttachmentBuilder(`./images/droid.png`);
+    const icon = new AttachmentBuilder(`./images/droid.png`);
     const embed = new EmbedBuilder()
         .setTitle(`DroidBot \`${version}\``)
         .setColor('#ff0000')
         .setThumbnail(`attachment://droid.png`)
         .setFooter({ text: `By warp32767` });
 
-    if (remoteCommit == localCommit.slice(0,7)) {
-        embed.setDescription(`Hello droiders!\n\n**DroidBot is up to date!**\nLocal Version: \`${localCommit.slice(0,7)}\`\nLatest Version: \`${remoteCommit}\``);
+    if (remoteCommit === localCommit.slice(0, 7)) {
+        embed.setDescription(`Hello droiders!\n\n**DroidBot is up to date!**\nLocal Version: \`${localCommit.slice(0, 7)}\`\nLatest Version: \`${remoteCommit}\``);
     } else {
-        embed.setDescription(`Hello droiders!\n\n**Please Update to Latest Version**\nLocal Version: \`${localCommit.slice(0,7)}\`\nLatest Version: \`${remoteCommit}\``);
+        embed.setDescription(`Hello droiders!\n\n**Please Update to Latest Version**\nLocal Version: \`${localCommit.slice(0, 7)}\`\nLatest Version: \`${remoteCommit}\``);
     }
 
     const channelId = '620122073074892811';
@@ -81,13 +77,11 @@ async function setupEmbed() {
     }
 }
 
-
 let guildIds = [];
 
-// Modify the "ready" event listener to include the periodic activity update
+// "ready" event listener updates bot activity
 client.on("ready", async () => {
     logger.info(`Logged in as ${client.user.tag}!`);
-    client.user.setActivity('on the droid', { type: ActivityType.Playing });
 
     // Call setupEmbed (existing functionality)
     await setupEmbed();
@@ -101,7 +95,7 @@ client.on("ready", async () => {
     setInterval(() => updateSensorActivity(client), 30000); // 30-second interval
 });
 
-// He sees everything
+// Login with the bot token
 client.login(token);
 
 module.exports = { guildIds, client };
