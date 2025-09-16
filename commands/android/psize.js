@@ -27,7 +27,7 @@ module.exports = {
             const results = resultsList[i];
 
             if (!results || results.length === 0) {
-                return interaction.editReply(`Nothing found for \`${optionValue}\``);
+                return interaction.editReply(`one of the selected phone(s) could not be found:`);
             }
 
             // Only one result? Auto-select
