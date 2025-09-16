@@ -1,6 +1,6 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
 const { ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ComponentType, EmbedBuilder } = require('discord.js');
-const { search, generateSizeComparison } = require('./psizeSearch'); // your module
+const { search, generateSizeComparison } = require('./psizeSearch'); // no this is my module
 
 const optionNames = ['first_phone', 'second_phone', 'third_phone'];
 
