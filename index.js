@@ -8,7 +8,21 @@ const { version } = require("./package.json");
 const { loadCommands } = require("./handler/slashCommands");
 const { deployCommands } = require("./handler/deployCommands");
 
-const sensor = require("node-dht-sensor").promises;
+// Check if running on Raspberry Pi
+const isRaspberryPi = () => {
+    try {
+        return fs.existsSync('/proc/cpuinfo') && 
+               fs.readFileSync('/proc/cpuinfo', 'utf8').includes('Raspberry Pi');
+    } catch (error) {
+        return false;
+    }
+};
+
+// Only require sensor if on Raspberry Pi
+let sensor;
+if (isRaspberryPi()) {
+    sensor = require("node-dht-sensor").promises;
+}
 
 // i vibe coded this part because i dont get paid enough
 const sensorType = 22;
@@ -16,6 +30,13 @@ const gpioPin = 4;
 
 // this maybe does something
 async function updateSensorActivity(client) {
+    // check if we are on a raspberry pi before trying to use node-dht-sensor, no idea why i added a case temp monitor but it made everything VERY complicated to manage
+    if (!isRaspberryPi()) {
+        const activityMessage = "Whatever";
+        client.user.setActivity(activityMessage, { type: ActivityType.Playing });
+        return;
+    }
+
     try {
         const { temperature, humidity } = await sensor.read(sensorType, gpioPin);
         const activityMessage = `Case Temp: ${temperature.toFixed(1)}°C, Humidity: ${humidity.toFixed(1)}%`;

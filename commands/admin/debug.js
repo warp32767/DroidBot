@@ -26,10 +26,6 @@ module.exports = {
                 .setDescription(`Restart the bot`))
         .addSubcommand(subcommand =>
             subcommand
-                .setName(`npmupdate`)
-                .setDescription(`npm i`))
-        .addSubcommand(subcommand =>
-            subcommand
                 .setName(`change_status`)
                 .setDescription(`Change the bot status`)
                 .addStringOption(option =>
