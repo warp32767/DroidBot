@@ -9,7 +9,7 @@ const processGeminiRequest = async (prompt, user) => {
     }
 
     const genAI = new GoogleGenerativeAI(config.gemini_api);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
     const safePrompt = `You are a helpful AI assistant in a Discord server. 
                       Please provide a helpful, friendly, and appropriate response to: ${prompt}

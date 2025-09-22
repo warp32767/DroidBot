@@ -3,23 +3,37 @@ const axios = require('axios');
 
 function searchDevices(cdn, data) {
     if (!cdn) {
-        throw new Error("Target device cannot be null or undefined.");
+        return [];
     }
 
     const results = [];
 
+    // The user input can be a full device name or a codename, so we should search in both 'name' and 'device' properties.
+    const normalizedCdn = cdn.toLowerCase();
+
     for (const brand in data) {
-        if (data.hasOwnProperty(brand)) {
+        if (Object.prototype.hasOwnProperty.call(data, brand)) {
             const devices = data[brand];
             for (const device of devices) {
-                if (device.device.includes(cdn) && device.name !== '') {
+                // We're now checking both the codename and the device name
+                if (device.device.toLowerCase().includes(normalizedCdn) || device.name.toLowerCase().includes(normalizedCdn)) {
                     results.push({ brand, name: device.name, device: device.device });
                 }
             }
         }
     }
 
-    return results.length > 0 ? results : null;
+    // Sort the results to show exact matches first
+    results.sort((a, b) => {
+        const aMatchesExact = a.device.toLowerCase() === normalizedCdn;
+        const bMatchesExact = b.device.toLowerCase() === normalizedCdn;
+
+        if (aMatchesExact && !bMatchesExact) return -1;
+        if (!aMatchesExact && bMatchesExact) return 1;
+        return 0;
+    });
+
+    return results;
 }
 
 module.exports = {
@@ -32,54 +46,49 @@ module.exports = {
                 .setRequired(true)
         ),
     async execute(interaction) {
-        const cdn2 = await interaction.options.getString('codename');
-        const cdn = await cdn2.replace(/[&\/\\#,()@$~%.'":*?<>{}`]/g, '');
+        const cdnInput = interaction.options.getString('codename');
+        // A more robust regex to remove any character that isn't a letter or a number.
+        const cleanedCdn = cdnInput.replace(/[^a-zA-Z0-9]/g, '');
         const url = 'https://raw.githubusercontent.com/androidtrackers/certified-android-devices/master/by_brand.json';
 
         try {
-            const json = await axios.get(`${url}`);
+            const json = await axios.get(url);
             const jsonData = json.data;
 
-            const devices = await searchDevices(cdn, jsonData);
-            if (!devices) {
-                await interaction.reply("Codename not found!");
+            const devices = searchDevices(cleanedCdn, jsonData);
+            if (devices.length === 0) {
+                await interaction.reply({ content: "Codename not found!", ephemeral: true });
                 return;
             }
 
             const embed = new EmbedBuilder()
-                .setTitle(`Devices matching \`${cdn}\``)
+                .setTitle(`Devices matching \`${cleanedCdn}\``)
                 .setColor('#2eb237');
 
+            const uniqueDevices = new Map();
             let counter = 0;
-            let lastName = "what";
-            let split = [];
 
-            devices.forEach(result => {
-                split = result.name.split(" ");
-                if (counter <= 24) {
-                    if (lastName !== result.name) {
-
-                        if (result.brand.toLowerCase() === split[0].toLowerCase()){
-                            embed.addFields({
-                                name: `${result.name}`,
-                                value: `\`${result.device}\``, 
-                                inline: true 
-                            });
-                        } else {
-                            embed.addFields({
-                                name: `${result.brand} ${result.name}`,
-                                value: `\`${result.device}\``, 
-                                inline: true 
-                            });
-                        }
-                        
-
+            for (const result of devices) {
+                // Use a combination of brand and name
+                const key = `${result.brand}_${result.name}`;
+                if (counter < 25 && !uniqueDevices.has(key)) {
+                    uniqueDevices.set(key, true);
+                    let fieldName = result.name;
+                    // Haven't tested this shit yet
+                    if (result.name.toLowerCase().startsWith(result.brand.toLowerCase())) {
+                        fieldName = result.name;
+                    } else {
+                        fieldName = `${result.brand} ${result.name}`;
                     }
-                }
-                lastName = result.name;
-                counter++
-            });
 
+                    embed.addFields({
+                        name: fieldName,
+                        value: `\`${result.device}\``,
+                        inline: true
+                    });
+                    counter++;
+                }
+            }
             await interaction.reply({ embeds: [embed] });
         } catch (error) {
             console.error('Error fetching device:', error);
