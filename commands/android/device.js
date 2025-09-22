@@ -57,7 +57,7 @@ module.exports = {
 
             const devices = searchDevices(cleanedCdn, jsonData);
             if (devices.length === 0) {
-                await interaction.reply({ content: "Codename not found!", ephemeral: true });
+                await interaction.reply({ content: "Codename not found!" });
                 return;
             }
 
