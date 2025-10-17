@@ -20,6 +20,12 @@ module.exports = {
             subcommand
                 .setName(`log`)
                 .setDescription(`Show last 2000-ish chars of errors`))
+
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName(`public_ip`)
+                .setDescription(`Get the machine's public IP`))
+
         .addSubcommand(subcommand =>
             subcommand
                 .setName(`restart_bot`)
@@ -210,6 +216,39 @@ module.exports = {
             }*/
 
             exec(`npx pm2 restart droidbot`);
+            return;
+        }
+
+        if (subcommand === `public_ip`) {
+            await interaction.deferReply({ ephemeral: true });
+
+            const https = require('https');
+
+            const getPublicIp = () => {
+                return new Promise((resolve, reject) => {
+                    https.get('https://api.ipify.org?format=json', (res) => {
+                        let data = '';
+                        res.on('data', chunk => data += chunk);
+                        res.on('end', () => {
+                            try {
+                                const parsed = JSON.parse(data);
+                                if (parsed && parsed.ip) resolve(parsed.ip);
+                                else reject(new Error('Unexpected response from IP service'));
+                            } catch (err) {
+                                reject(err);
+                            }
+                        });
+                    }).on('error', reject);
+                });
+            };
+
+            try {
+                const ip = await getPublicIp();
+                await interaction.followUp({ content: `Public IP: ${ip}`, ephemeral: true });
+            } catch (error) {
+                await interaction.followUp({ content: `Failed to get public IP: ${error.message}`, ephemeral: true });
+            }
+
             return;
         }
 
