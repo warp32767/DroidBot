@@ -215,7 +215,7 @@ module.exports = {
                 await user.send(`${formatTimestamp()} The bot is being restarted.`);
             }*/
 
-            exec(`npx pm2 restart droidbot`);
+            exec(`npx pm2 stop droidbot`);
             return;
         }
 
