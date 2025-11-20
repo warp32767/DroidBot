@@ -3,7 +3,7 @@ const { Client, Collection, GatewayIntentBits, EmbedBuilder, ActivityType, Attac
 const axios = require('axios');
 const fs = require('node:fs');
 const { loadEvents } = require("./handler/events");
-const { token } = require('./config.json');
+const { token, announcementChannelId } = require('./config.json');
 const { version } = require('./package.json');
 const { loadCommands } = require("./handler/slashCommands");
 const { deployCommands } = require("./handler/deployCommands");
@@ -21,7 +21,7 @@ loadEvents(client);
 const logger = require("./handler/logger")
 
 // check for updates on startup
-async function checkForUpdates(){
+async function checkForUpdates() {
     const commitJson = await axios.get(
         'https://api.github.com/repos/warp32767/DroidBot/commits/master',
     );
@@ -34,7 +34,8 @@ async function checkForUpdates(){
 async function setupEmbed() {
     const remoteCommit = await checkForUpdates();
 
-    let localCommit = await fs.readFileSync('.git/refs/heads/master', 'utf8');
+    // Optimization: Use async readFile
+    let localCommit = await fs.promises.readFile('.git/refs/heads/master', 'utf8');
 
     icon = new AttachmentBuilder(`./images/droid.png`);
     const embed = new EmbedBuilder()
@@ -43,19 +44,21 @@ async function setupEmbed() {
         .setThumbnail(`attachment://droid.png`)
         .setFooter({ text: `By warp32767` });
 
-    if (remoteCommit == localCommit.slice(0,7)) {
-        embed.setDescription(`Hello droiders!\n\n**DroidBot is up to date!**\nLocal Version: \`${localCommit.slice(0,7)}\`\nLatest Version: \`${remoteCommit}\``);
+    if (remoteCommit == localCommit.slice(0, 7)) {
+        embed.setDescription(`Hello droiders!\n\n**DroidBot is up to date!**\nLocal Version: \`${localCommit.slice(0, 7)}\`\nLatest Version: \`${remoteCommit}\``);
     } else {
-        embed.setDescription(`Hello droiders!\n\n**Please Update to Latest Version**\nLocal Version: \`${localCommit.slice(0,7)}\`\nLatest Version: \`${remoteCommit}\``);
+        embed.setDescription(`Hello droiders!\n\n**Please Update to Latest Version**\nLocal Version: \`${localCommit.slice(0, 7)}\`\nLatest Version: \`${remoteCommit}\``);
     }
 
-    const channelId = '620122073074892811';
-
-    const channel = client.channels.cache.get(channelId);
-    if (channel) {
-        channel.send({ embeds: [embed], files: [icon] });
-    } else {
-        logger.error(`Could not find the specified channel: ${channelId}`);
+    try {
+        const channel = await client.channels.fetch(announcementChannelId);
+        if (channel) {
+            channel.send({ embeds: [embed], files: [icon] });
+        } else {
+            logger.error(`Could not find the specified channel: ${announcementChannelId}`);
+        }
+    } catch (error) {
+        logger.error(`Error fetching channel ${announcementChannelId}: ${error}`);
     }
 }
 
