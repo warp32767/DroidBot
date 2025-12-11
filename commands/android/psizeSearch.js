@@ -100,9 +100,6 @@ async function search(srch) {
   try {
     const page = await getSearchPage();
 
-    // Force reload to ensure absolutely clean state every time
-    await page.reload({ waitUntil: "domcontentloaded" });
-
     const searchInputSelector = '.widgetCompareToolbar__form_search';
     const resultsSelector = '.widgetAutocomplete__list li a';
 
@@ -110,8 +107,14 @@ async function search(srch) {
     try {
       await page.waitForSelector(searchInputSelector);
 
+      // Clear input and type new query
       await page.evaluate((selector, text) => {
         const input = document.querySelector(selector);
+        input.focus();
+        input.value = ''; // Direct clear
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+
+        // Type new value
         input.value = text;
         input.dispatchEvent(new Event('input', { bubbles: true }));
         input.dispatchEvent(new Event('change', { bubbles: true }));
