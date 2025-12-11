@@ -2,6 +2,7 @@ const { DWebp } = require('cwebp');
 const { parse } = require("node-html-parser");
 const canvas = require('canvas');
 const { Jimp } = require('jimp');
+const fs = require('fs');
 
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
@@ -23,7 +24,7 @@ async function getBrowser() {
     globalBrowser = null;
   }
 
-  globalBrowser = await puppeteer.launch({
+  const launchOptions = {
     headless: "new",
     args: [
       '--no-sandbox',
@@ -32,7 +33,18 @@ async function getBrowser() {
       '--disable-accelerated-2d-canvas',
       '--disable-gpu',
     ]
-  });
+  };
+
+  // i'm too lazy to solve puppeteer issues on linux so just use chromium
+  if (process.platform === 'linux') {
+    if (fs.existsSync('/usr/bin/chromium-browser')) {
+      launchOptions.executablePath = '/usr/bin/chromium-browser';
+    } else if (fs.existsSync('/usr/bin/chromium')) {
+      launchOptions.executablePath = '/usr/bin/chromium';
+    }
+  }
+
+  globalBrowser = await puppeteer.launch(launchOptions);
   return globalBrowser;
 }
 
