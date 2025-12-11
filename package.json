@@ -21,6 +21,9 @@
     "node-cache": "^5.1.2",
     "node-html-parser": "^7.0.1",
     "pm2": "^6.0.5",
+    "puppeteer": "^24.32.1",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
     "simple-git": "^3.27.0",
     "sqlite3": "^5.1.7"
   }

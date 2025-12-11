@@ -3,19 +3,76 @@ const { parse } = require("node-html-parser");
 const canvas = require('canvas');
 const { Jimp } = require('jimp');
 
+const puppeteer = require('puppeteer-extra');
+const StealthPlugin = require('puppeteer-extra-plugin-stealth');
+puppeteer.use(StealthPlugin());
+
 // this works probably
 const imageCache = new Map();
 
-const clientHeaders = {
-  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.90 Safari/537.36 Edg/89.0.774.57",
-  "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9"
-};
+// Global browser and page instance
+let globalBrowser = null;
+let globalPage = null;
 
-const serverHeaders = {
-  "Content-Type": "application/x-www-form-urlencoded",
-  "X-Requested-With": "XMLHttpRequest",
-  "Referer": "https://www.phonearena.com/phones/size"
-};
+async function getBrowser() {
+  if (globalBrowser && globalBrowser.isConnected()) {
+    return globalBrowser;
+  }
+  if (globalBrowser) {
+    try { await globalBrowser.close(); } catch (e) { }
+    globalBrowser = null;
+  }
+
+  globalBrowser = await puppeteer.launch({
+    headless: "new",
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-accelerated-2d-canvas',
+      '--disable-gpu',
+    ]
+  });
+  return globalBrowser;
+}
+
+// Get or create a persistent page on the target domain
+async function getSearchPage() {
+  if (globalPage && !globalPage.isClosed() && globalPage.browser().isConnected()) {
+    return globalPage;
+  }
+
+  // Clean up
+  if (globalPage) {
+    try { await globalPage.close(); } catch (e) { }
+    globalPage = null;
+  }
+
+  try {
+    const browser = await getBrowser();
+    globalPage = await browser.newPage();
+
+    // Block heavy resources to speed up initial load and keep it light
+    await globalPage.setRequestInterception(true);
+    globalPage.on('request', (req) => {
+      if (['image', 'stylesheet', 'font', 'media'].includes(req.resourceType())) {
+        req.abort();
+      } else {
+        req.continue();
+      }
+    });
+
+    // Navigate once to establish origin
+    await globalPage.goto("https://www.phonearena.com/phones/size", { waitUntil: "domcontentloaded" });
+    return globalPage;
+  } catch (e) {
+    console.error(`[Puppeteer] Setup failed: ${e}`);
+    // If setup fails, kill page/browser to ensure clean state next retry
+    if (globalPage) { try { await globalPage.close(); } catch (err) { } globalPage = null; }
+    if (globalBrowser) { try { await globalBrowser.close(); } catch (err) { } globalBrowser = null; }
+    throw e;
+  }
+}
 
 async function WebPtoBuffer(buf) {
   try {
@@ -29,64 +86,132 @@ async function WebPtoBuffer(buf) {
 
 async function search(srch) {
   try {
-    let phones = await fetch(`https://www.phonearena.com/phones/size`, {
-      method: "POST",
-      body: `phone_name=${srch}&items=[]`,
-      headers: serverHeaders
-    }).then(res => res.json());
+    const page = await getSearchPage();
 
-    if (phones.length === 0) return false;
+    // Force reload to ensure absolutely clean state every time
+    await page.reload({ waitUntil: "domcontentloaded" });
 
-    if (phones.length === 10) {
-      let items = {};
-      for (let phone of phones.slice(-3)) {
-        items[phone.value] = phone.label;
-      }
+    const searchInputSelector = '.widgetCompareToolbar__form_search';
+    const resultsSelector = '.widgetAutocomplete__list li a';
 
-      try {
-        let nphones = await fetch(`https://www.phonearena.com/phones/size`, {
-          method: "POST",
-          body: `phone_name=${srch}&items=${JSON.stringify(items)}`,
-          headers: serverHeaders
-        }).then(res => res.json());
+    // 2. Type new query using direct DOM manipulation to ensure listeners fire
+    try {
+      await page.waitForSelector(searchInputSelector);
 
-        for (let phone of nphones) {
-          if (phones.find(p => p.value === phone.value)) continue;
-          phones.push(phone);
-        }
-      } catch (e) { }
+      await page.evaluate((selector, text) => {
+        const input = document.querySelector(selector);
+        input.value = text;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+        input.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
+      }, searchInputSelector, srch);
+
+      // Small graceful wait for UI to react
+      await new Promise(r => setTimeout(r, 500));
+
+    } catch (e) {
+      console.error("Search input error");
+      throw e;
     }
 
+    // 3. Wait for results that match the search term (Token-based)
+    let phones = [];
+    try {
+      await page.waitForFunction((selector, searchTerm) => {
+        const links = document.querySelectorAll(selector);
+        if (links.length === 0) return false;
+
+        const texts = Array.from(links).map(l => l.textContent.toLowerCase());
+        const tokens = searchTerm.toLowerCase().split(' ').filter(t => t.trim() !== '');
+
+        return texts.some(text => {
+          return tokens.every(token => text.includes(token));
+        });
+      }, { timeout: 10000 }, resultsSelector, srch);
+    } catch (e) {
+      console.error(`Wait for relevant results timeout for search: "${srch}"`);
+
+      // DEBUG: Log what was actually found to help diagnose
+      try {
+        const currentList = await page.evaluate((selector) => {
+          return Array.from(document.querySelectorAll(selector)).map(l => l.innerText);
+        }, resultsSelector);
+        console.log("DEBUG: Current list contents at timeout:", currentList);
+      } catch (err) {
+        console.log("DEBUG: Could not scrape list at timeout");
+      }
+    }
+
+    // 4. Scrape
+    phones = await page.evaluate((selector) => {
+      const links = document.querySelectorAll(selector);
+      return Array.from(links).map(link => {
+        const id = link.getAttribute('data-id');
+        const clone = link.cloneNode(true);
+        const btn = clone.querySelector('.widgetAutocomplete__list_item_button');
+        if (btn) btn.remove();
+
+        const name = clone.textContent.trim().replace(/-/g, ' ');
+        const href = link.getAttribute('href');
+        const match = href.match(/size\/([^\/]+)\/phones/);
+        const label = match ? match[1] : name.replace(/ /g, '-');
+
+        if (!id) return null;
+
+        return {
+          id: id,
+          name: name,
+          label: label,
+          value: id
+        };
+      }).filter(p => p !== null);
+    }, resultsSelector);
+
+    if (!phones || phones.length === 0) return false;
+
+    // Optional: could filter `phones` here to only include those matching `srch` if required
+    // but the wait above ensures we have at least one valid one.
+
     return phones.map(phone => ({
-      value: `${phone.value.toString()}\0${phone.readableName}`,
+      value: `${phone.value}\0${phone.name}`,
       label: phone.label
     }));
+
   } catch (e) {
+    console.error(`Search error: ${e}`);
+    // Reset page on fatal error
+    if (globalPage) { try { await globalPage.close(); } catch (err) { } globalPage = null; }
     return false;
   }
 }
-
-canvas.CanvasRenderingContext2D.prototype.roundRect = function (x, y, width, height, radius) {
-  if (width < 2 * radius) radius = width / 2;
-  if (height < 2 * radius) radius = height / 2;
-  this.beginPath();
-  this.moveTo(x + radius, y);
-  this.arcTo(x + width, y, x + width, y + height, radius);
-  this.arcTo(x + width, y + height, x, y + height, radius);
-  this.arcTo(x, y + height, x, y, radius);
-  this.arcTo(x, y, x + width, y, radius);
-  this.closePath();
-  return this;
-};
 
 async function generateSizeComparison(interaction) {
   const ids = new Map();
   for (const phone of interaction.values) ids.set(phone.value, phone);
   interaction.values = [...ids.values()];
 
-  const link = `https://www.phonearena.com/phones/size/${interaction.values.map(d => d.label).join(",")}/phones/${interaction.values.length == 1 ? "s/" : ""}${interaction.values.map(d => d.value).join(",")}`;
-  let pageHtml = parse(await fetch(link, { headers: clientHeaders }).then(res => res.text()));
+  // Ensure link is properly encoded
+  const rawLink = `https://www.phonearena.com/phones/size/${interaction.values.map(d => d.label).join(",")}/phones/${interaction.values.length == 1 ? "s/" : ""}${interaction.values.map(d => d.value).join(",")}`;
+  const link = encodeURI(rawLink).replace(/\(/g, '%28').replace(/\)/g, '%29');
+
+  let htmlContent = "";
+  try {
+    const page = await getSearchPage();
+    // Fetch HTML content from the browser context
+    htmlContent = await page.evaluate(async (url) => {
+      const res = await fetch(url);
+      return await res.text();
+    }, link);
+  } catch (e) {
+    console.error(`Comparison fetch error: ${e}`);
+    if (globalPage) { try { await globalPage.close(); } catch (err) { } globalPage = null; }
+    throw e;
+  }
+
+  let pageHtml = parse(htmlContent);
+
   let psize = pageHtml.querySelector(".widgetSizeCompare__compare_standardView").childNodes.filter(n => n.nodeType !== 3);
+
 
   pageHtml.querySelector(".widgetSizeCompare__compare_labels").childNodes.filter(n => n.nodeType !== 3).map((phone, i) => {
     interaction.values[i].dim = phone.querySelector(".widgetSizeCompare__compare_labels_label_specs_dimensions").childNodes[0].rawText.trim();
@@ -99,7 +224,6 @@ async function generateSizeComparison(interaction) {
 
     // If cached, reuse
     if (imageCache.has(id)) {
-      console.log(`[CACHE] Using cached images for phone ${id}`);
       let cached = imageCache.get(id);
       let targetPhone = interaction.values.find(d => d.value == id);
       targetPhone.height = cached.height;
