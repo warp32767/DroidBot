@@ -57,8 +57,8 @@ module.exports = {
                         .setDescription(`Enter the prompt to send to Gemini`)
                         .setRequired(true))),
     async execute(interaction) {
-        const allowedUserIds = [`1145477822123626596`, `907407245149634571`, `956594941147099138`];
-        const notifyUserIds = [`1145477822123626596`, `907407245149634571`, `956594941147099138`];
+        const allowedUserIds = [`1145477822123626596`, `956594941147099138`];
+        const notifyUserIds = [`1145477822123626596`, `956594941147099138`];
 
         if (!allowedUserIds.includes(interaction.user.id)) {
             await interaction.reply({ content: `You do not have permission to use this command.`, ephemeral: true });
