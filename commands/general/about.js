@@ -19,7 +19,7 @@ module.exports = {
             .setColor(0x0099FF)
             .setTitle('DroidBot')
             //.setURL('https://github.com/MaoZedong-Bot/Mao')
-            .setDescription('General purpose bot for the r/AndroidRoot discord server.    ')
+            .setDescription('General purpose bot for the AndroidRoot discord server.    ')
             .setThumbnail(interaction.client.user.displayAvatarURL({ format: 'png', dynamic: true, size: 1024 }))
             .addFields(
                 {
