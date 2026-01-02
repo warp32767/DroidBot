@@ -65,26 +65,39 @@ let guildIds = [];
 client.on("ready", async () => {
     logger.info(`Logged in as ${client.user.tag}!`);
     
-    const targetDate = new Date('2026-01-01T00:00:00Z');
-
     function updateStatus() {
         const now = new Date();
-        const diff = targetDate - now;
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth(); // 0 = Jan, 11 = Dec
+        const currentDate = now.getDate();
 
-        if (diff <= 0) {
+        // January? Already??
+        const targetDate = new Date(`January 1, ${currentYear + 1} 00:00:00 UTC`);
+        // The celebration ends Jan 5th of the CURRENT year
+        const endOfCelebration = new Date(`January 5, ${currentYear} 00:00:00 UTC`);
+
+        // Great! Let's tell people something nice!
+        if (currentMonth === 0 && currentDate < 5) {
             client.user.setActivity('Happy New Year!', { type: ActivityType.Playing });
             return;
         }
 
-        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-        const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
-        const minutes = Math.floor((diff / (1000 * 60)) % 60);
+        // 2. Oh hey, another year ends..
+        if (currentMonth === 11) {
+            const diff = targetDate - now;
+            const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
+            const minutes = Math.floor((diff / (1000 * 60)) % 60);
 
-        client.user.setActivity(`${days}d ${hours}h ${minutes}m until 2026`, { type: ActivityType.Watching });
+            client.user.setActivity(`${days}d ${hours}h ${minutes}m until ${currentYear + 1}`, { type: ActivityType.Watching });
+            return;
+        }
+
+        // No celebration :(
+        client.user.setActivity('/help when', { type: ActivityType.Custom });
     }
 
     updateStatus();
-    setInterval(updateStatus, 10000); // Update every minute
 
     await setupEmbed();
 
