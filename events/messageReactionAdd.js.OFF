@@ -1,5 +1,5 @@
 const { Events, EmbedBuilder } = require('discord.js');
-const { processGeminiRequest } = require('../utils/geminiUtil');
+//const { processGeminiRequest } = require('../utils/geminiUtil.js');
 const logger = require('../handler/logger');
 
 module.exports = {

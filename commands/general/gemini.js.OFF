@@ -1,6 +1,6 @@
 const { SlashCommandBuilder } = require(`@discordjs/builders`);
 const { EmbedBuilder, Collection, PermissionFlagsBits } = require(`discord.js`);
-const { processGeminiRequest } = require('../../utils/geminiUtil');
+const { processGeminiRequest } = require('../../utils/geminiUtil.js.OFF');
 const logger = require(`../../handler/logger`);
 
 const cooldowns = new Collection();

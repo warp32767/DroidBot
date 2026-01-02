@@ -47,15 +47,7 @@ module.exports = {
                             { name: `Streaming`, value: `streaming` },
                             { name: `Listening`, value: `listening` },
                             { name: `Watching`, value: `watching` }
-                        )))
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName(`gemini`)
-                .setDescription(`(Use Gemini to generate a response`)
-                .addStringOption(option =>
-                    option.setName(`prompt`)
-                        .setDescription(`Enter the prompt to send to Gemini`)
-                        .setRequired(true))),
+                        ))),
     async execute(interaction) {
         const allowedUserIds = [`1145477822123626596`, `956594941147099138`];
         const notifyUserIds = [`1145477822123626596`, `956594941147099138`];
