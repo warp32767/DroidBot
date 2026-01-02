@@ -98,6 +98,9 @@ client.on("ready", async () => {
     }
 
     updateStatus();
+        
+    // I forgot this lol
+    setInterval(updateStatus, 10000);
 
     await setupEmbed();
 
