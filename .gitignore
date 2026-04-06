@@ -8,3 +8,5 @@ db/settings.db
 logs/*
 logs/*.log
 .idea
+blocklist.json
+filtertool2.js

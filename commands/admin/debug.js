@@ -5,7 +5,6 @@ const path = require(`path`);
 const { exec } = require(`child_process`);
 const fs = require(`fs`);
 const logger = require(`../../handler/logger`);
-const { GoogleGenerativeAI } = require('@google/generative-ai');
 const config = require('../../config.json');
 
 module.exports = {
@@ -20,12 +19,10 @@ module.exports = {
             subcommand
                 .setName(`log`)
                 .setDescription(`Show last 2000-ish chars of errors`))
-
         .addSubcommand(subcommand =>
             subcommand
                 .setName(`public_ip`)
                 .setDescription(`Get the machine's public IP`))
-
         .addSubcommand(subcommand =>
             subcommand
                 .setName(`restart_bot`)
@@ -47,7 +44,12 @@ module.exports = {
                             { name: `Streaming`, value: `streaming` },
                             { name: `Listening`, value: `listening` },
                             { name: `Watching`, value: `watching` }
-                        ))),
+                        )))
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName(`install`)
+                .setDescription(`Run npm install and report the result`)),
+    // ... rest of the module.exports
     async execute(interaction) {
         const allowedUserIds = [`1145477822123626596`, `956594941147099138`];
         const notifyUserIds = [`1145477822123626596`, `956594941147099138`];
@@ -66,56 +68,6 @@ module.exports = {
         };
 
         const subcommand = interaction.options.getSubcommand();
-
-        if (subcommand === `gemini`) {
-            const prompt = interaction.options.getString(`prompt`);
-
-            if (prompt.length > 500) {
-                // Remove `ephemeral: true` to make the message visible for everyone in the channel
-                await interaction.reply({ content: `Prompt is too long (maximum is 500 characters).` });
-                return;
-            }
-
-            await interaction.deferReply();
-
-            try {
-                const genAI = new GoogleGenerativeAI(config.gemini_api);
-                const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-
-                const safePrompt = `You are a helpful AI assistant in a Discord server. 
-                            Please provide a helpful, friendly, and appropriate response to: ${prompt}
-                            Keep the response concise and under 500 characters. If the output contains a bad word or explicit content refuse to answer.`;
-
-                const result = await model.generateContent(safePrompt);
-                const response = result.response.text();
-
-                const embed = new EmbedBuilder()
-                    .setTitle(`ðŸ¤– Gemini Response`)
-                    .setDescription(response)
-                    .setColor(0x00A8FF)
-                    .setFooter({
-                        text: `Requested by ${interaction.user.tag}`,
-                        iconURL: interaction.user.displayAvatarURL()
-                    })
-                    .setTimestamp();
-
-                embed.addFields({
-                    name: `Question:`,
-                    value: prompt.length > 1024 ? prompt.substring(0, 1021) + '...' : prompt
-                });
-
-                logger.info(`Gemini AI used by ${interaction.user.tag} (${interaction.user.id}) - Prompt: ${prompt}`);
-
-                // Remove `ephemeral: true` to make this message visible for everyone
-                await interaction.followUp({ embeds: [embed] });
-            } catch (error) {
-                logger.error(`Error processing Gemini prompt: ${error.message}`);
-                // Make this error response visible for everyone
-                await interaction.followUp({ content: `An error occurred while processing your request: ${error.message}` });
-            }
-
-            return;
-        }
 
         if (subcommand === `update`) {
             await interaction.deferReply({ ephemeral: true });
@@ -269,5 +221,34 @@ module.exports = {
             interaction.client.user.setActivity(newStatus, { type: activityTypeEnum });
             await interaction.reply({ content: `Status changed to: ${newStatus} (${activityType})`, ephemeral: true });
         }
+        if (subcommand === `install`) {
+            await interaction.deferReply({ ephemeral: true });
+
+            const rootDir = path.resolve(__dirname, `../../`);
+
+            exec(`npm i`, { cwd: rootDir }, async (error, stdout, stderr) => {
+                let resultMessage;
+                if (error) {
+                    resultMessage = `npm install failed:\n\`\`\`${error.message}\`\`\`\nStderr:\n\`\`\`${stderr}\`\`\``;
+                } else {
+                    resultMessage = `npm install completed successfully.\nStdout:\n\`\`\`${stdout}\`\`\``;
+                }
+
+                // Truncate if too long for Discord embed limits
+                if (resultMessage.length > 4000) {
+                    resultMessage = resultMessage.slice(0, 4000) + `\n... (truncated)`;
+                }
+
+                const embed = new EmbedBuilder()
+                    .setTitle(`npm install Result`)
+                    .setDescription(resultMessage)
+                    .setColor(error ? 0xFF0000 : 0x00FF00);
+
+                await interaction.followUp({ embeds: [embed], ephemeral: true });
+            });
+
+            return;
+        }
+
     }
 };

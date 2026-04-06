@@ -2,11 +2,23 @@ const { REST } = require("@discordjs/rest");
 const { Client, Collection, GatewayIntentBits, EmbedBuilder, ActivityType, AttachmentBuilder } = require("discord.js");
 const axios = require('axios');
 const fs = require('node:fs');
+const path = require('path');
 const { loadEvents } = require("./handler/events");
 const { token } = require('./config.json');
 const { version } = require('./package.json');
 const { loadCommands } = require("./handler/slashCommands");
 const { deployCommands } = require("./handler/deployCommands");
+
+// Logging
+const logger = require("./handler/logger")
+
+// Create blocklist.json if it doesn't exist
+const blocklistPath = path.join(__dirname, './events/helper/blocklist.json');
+if (!fs.existsSync(blocklistPath)) {
+    const defaultBlocklist = [];
+    fs.writeFileSync(blocklistPath, JSON.stringify(defaultBlocklist, null, 2));
+    logger.info('Created default blocklist.json');
+}
 
 const client = new Client({ intents: 46791 });
 client.commands = new Collection();
@@ -17,17 +29,19 @@ const rest = new REST({ version: "10" }).setToken(token);
 loadCommands(client);
 loadEvents(client);
 
-// Logging
-const logger = require("./handler/logger")
-
 // check for updates on startup
-async function checkForUpdates(){
-    const commitJson = await axios.get(
-        'https://api.github.com/repos/warp32767/DroidBot/commits/master',
-    );
-    const commitData = commitJson.data;
-    const commit = commitData.sha;
-    return commit.slice(0, 7);
+async function checkForUpdates() {
+    try {
+        const commitJson = await axios.get(
+            'https://api.github.com/repos/warp32767/DroidBot/commits/master',
+        );
+        const commitData = commitJson.data;
+        const commit = commitData.sha;
+        return commit.slice(0, 7);
+    } catch (error) {
+        logger.error(`Failed to check for updates: ${error.message}`);
+        return null;
+    }
 }
 
 
@@ -43,13 +57,15 @@ async function setupEmbed() {
         .setThumbnail(`attachment://droid.png`)
         .setFooter({ text: `By warp32767` });
 
-    if (remoteCommit == localCommit.slice(0,7)) {
-        embed.setDescription(`Hello droiders!\n\n**DroidBot is up to date!**\nLocal Version: \`${localCommit.slice(0,7)}\`\nLatest Version: \`${remoteCommit}\``);
+    if (!remoteCommit) {
+        embed.setDescription(`**Could not check for updates right now.**\nLocal Version: \`${localCommit.slice(0,7)}\``);
+    } else if (remoteCommit == localCommit.slice(0,7)) {
+        embed.setDescription(`**DroidBot is up to date!**\nLocal Version: \`${localCommit.slice(0,7)}\`\nLatest Version: \`${remoteCommit}\``);
     } else {
-        embed.setDescription(`Hello droiders!\n\n**Please Update to Latest Version**\nLocal Version: \`${localCommit.slice(0,7)}\`\nLatest Version: \`${remoteCommit}\``);
+        embed.setDescription(`**Please Update to Latest Version**\nLocal Version: \`${localCommit.slice(0,7)}\`\nLatest Version: \`${remoteCommit}\``);
     }
 
-    const channelId = '620122073074892811';
+    const channelId = require('./config.json').startup_msg_channel;
 
     const channel = client.channels.cache.get(channelId);
     if (channel) {
@@ -62,9 +78,9 @@ async function setupEmbed() {
 
 let guildIds = [];
 
-client.on("ready", async () => {
+client.on("clientReady", async () => {
     logger.info(`Logged in as ${client.user.tag}!`);
-    
+
     function updateStatus() {
         const now = new Date();
         const currentYear = now.getFullYear();
@@ -94,7 +110,7 @@ client.on("ready", async () => {
         }
 
         // No celebration :(
-        client.user.setActivity('/help when', { type: ActivityType.Custom });
+        client.user.setActivity('what kind of fruit is this', { type: ActivityType.Custom });
     }
 
     updateStatus();

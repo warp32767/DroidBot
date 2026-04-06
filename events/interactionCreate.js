@@ -6,7 +6,6 @@ module.exports = {
 
 	async execute(interaction) {
 
-		const { buttonIdHandler } = require('./helper/buttonIdHandler');
 		const logger = require("../handler/logger");
 
 		if (interaction.isChatInputCommand()){
@@ -29,9 +28,6 @@ module.exports = {
 					await interaction.reply({ content: 'There was an error while executing this command!', ephemeral: true });
 				}
 			}
-		} else if (interaction.isButton()) {
-			// Permanent button menus
-			buttonIdHandler(interaction.customId, interaction.message)
 		} 
 	},
 };

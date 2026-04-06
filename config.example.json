@@ -1,5 +1,6 @@
 {
   "token": "",
   "clientId": "",
-  "gemini_api": ""
+  "log_channel": "",
+  "startup_msg_channel": ""
 }
