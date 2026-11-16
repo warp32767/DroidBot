@@ -91,6 +91,10 @@ function createGsmClient({
                 page = await browser.newPage();
                 const recordResourceError = (url, reason) => {
                     const host = new URL(url).hostname;
+                    // Cloudflare deliberately makes DNS probes that may fail.
+                    // Keep failures for the main challenge host visible.
+                    if (reason === 'net::ERR_NAME_NOT_RESOLVED' &&
+                        (host.endsWith('.challenges.cloudflare.com') || host === 'dnstest.dev' || host.endsWith('.dnstest.dev'))) return;
                     if (resourceErrors.size < 10 && (host === 'challenges.cloudflare.com' || host.endsWith('.challenges.cloudflare.com') || host === 'www.gsmarena.com')) {
                         resourceErrors.add(`${host}: ${reason}`);
                     }
