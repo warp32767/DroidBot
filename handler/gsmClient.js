@@ -8,17 +8,23 @@ const PAGE_SELECTOR = '#review-body .makers, h1.specs-phone-name-title';
 
 async function waitForDeviceContent(page, timeout) {
     const controller = new AbortController();
+    let checkboxError;
     // A frame and its spinner can exist well before the checkbox is ready.
     const checkboxAttempt = (async () => {
         const frame = await page.waitForFrame(frame => frame.url().startsWith('https://challenges.cloudflare.com/'), {
             timeout, signal: controller.signal,
         });
         await frame.locator('::-p-aria([role="checkbox"])').setTimeout(timeout).click({ signal: controller.signal });
-    })().catch(() => {});
+    })().catch(error => {
+        if (!controller.signal.aborted) checkboxError = error;
+    });
     try {
         // Automatic verification can navigate directly to content without ever
         // exposing a checkbox. That is also a successful outcome.
         await page.waitForSelector(PAGE_SELECTOR, { timeout });
+    } catch (error) {
+        const title = await page.title().catch(() => 'unknown');
+        throw new Error(`Device content did not appear within ${timeout / 1000}s; page title: ${JSON.stringify(title)}.${checkboxError ? ` Checkbox interaction: ${checkboxError.message}` : ''}`, { cause: error });
     } finally {
         controller.abort();
         await checkboxAttempt;
@@ -55,6 +61,7 @@ function createGsmClient({
         if (refreshPromise) return refreshPromise;
         refreshPromise = (async () => {
             let browser;
+            let stage = 'launching Chrome';
             try {
                 browser = await launch({
                     headless, userDataDir: profileDir,
@@ -62,13 +69,17 @@ function createGsmClient({
                     args: ['--disable-blink-features=AutomationControlled'],
                     timeout: 30_000, protocolTimeout: 30_000,
                 });
+                stage = 'opening a browser page';
                 const page = await browser.newPage();
                 await page.setUserAgent({ userAgent: (await browser.userAgent()).replace('HeadlessChrome/', 'Chrome/') });
                 await page.setExtraHTTPHeaders({ 'Accept-Language': 'en-US,en;q=0.9' });
-                await page.goto(url.href, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+                stage = 'navigating to GSMArena';
+                const response = await page.goto(url.href, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+                stage = `waiting for device content (HTTP ${response?.status() ?? 'unknown'})`;
                 // Wait for actual content, rather than caching a challenge page as an empty result.
                 // Visible mode allows an operator to complete an interactive check locally.
                 await waitForDeviceContent(page, headless ? 30_000 : 120_000);
+                stage = 'reading browser session cookies';
                 const cookies = await browser.defaultBrowserContext().cookies();
                 const userAgent = await page.evaluate(() => navigator.userAgent);
                 // GSMArena verifies its own Turnstile form, so its session cookie need
@@ -85,7 +96,11 @@ function createGsmClient({
                 };
                 return session;
             } catch (error) {
-                throw new Error('GSMArena browser session could not load device content. The site may require an interactive challenge.', { cause: error });
+                const failure = new Error(`GSMArena browser session failed while ${stage}: ${error.message}`, { cause: error });
+                // Installation, shared-library, sandbox, and profile-lock errors
+                // will not improve by launching the same configuration again.
+                failure.retryable = stage !== 'launching Chrome';
+                throw failure;
             } finally {
                 if (browser) await browser.close().catch(() => {});
             }
@@ -136,6 +151,7 @@ function createGsmClient({
                         else if (session === observedSession) await refresh(url);
                     } catch (error) {
                         lastError = error;
+                        if (error.retryable === false) break;
                         if (attempt < 2) { await pause(1000); continue; }
                         break;
                     }
