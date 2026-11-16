@@ -9,12 +9,13 @@ const PAGE_SELECTOR = '#review-body .makers, h1.specs-phone-name-title';
 async function waitForDeviceContent(page, timeout) {
     const controller = new AbortController();
     let checkboxError;
+    const checkboxTimeout = Math.max(1_000, timeout - 3_000);
     // A frame and its spinner can exist well before the checkbox is ready.
     const checkboxAttempt = (async () => {
         const frame = await page.waitForFrame(frame => frame.url().startsWith('https://challenges.cloudflare.com/'), {
-            timeout, signal: controller.signal,
+            timeout: checkboxTimeout, signal: controller.signal,
         });
-        await frame.locator('::-p-aria([role="checkbox"])').setTimeout(timeout).click({ signal: controller.signal });
+        await frame.locator('::-p-aria([role="checkbox"])').setTimeout(checkboxTimeout).click({ signal: controller.signal });
     })().catch(error => {
         if (!controller.signal.aborted) checkboxError = error;
     });
