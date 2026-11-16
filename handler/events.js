@@ -8,10 +8,15 @@ function loadEvents(client)
     for (const file of eventFiles) {
         const filePath = path.join(eventsPath, file);
         const event = require(filePath);
+        const listener = (...args) => {
+            Promise.resolve().then(() => event.execute(...args)).catch(error => {
+                require('./logger').error(`Event ${event.name} failed: ${error.stack || error.message}`);
+            });
+        };
         if (event.once) {
-            client.once(event.name, (...args) => event.execute(...args));
+            client.once(event.name, listener);
         } else {
-            client.on(event.name, (...args) => event.execute(...args));
+            client.on(event.name, listener);
         }
     }
 }

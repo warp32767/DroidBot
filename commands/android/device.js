@@ -46,18 +46,19 @@ module.exports = {
                 .setRequired(true)
         ),
     async execute(interaction) {
+        await interaction.deferReply();
         const cdnInput = interaction.options.getString('codename');
         // A more robust regex to remove any character that isn't a letter or a number.
         const cleanedCdn = cdnInput.replace(/[^a-zA-Z0-9]/g, '');
         const url = 'https://raw.githubusercontent.com/androidtrackers/certified-android-devices/master/by_brand.json';
 
         try {
-            const json = await axios.get(url);
+            const json = await axios.get(url, { timeout: 15_000 });
             const jsonData = json.data;
 
             const devices = searchDevices(cleanedCdn, jsonData);
             if (devices.length === 0) {
-                await interaction.reply({ content: "Codename not found!", ephemeral: true });
+                await interaction.editReply({ content: "Codename not found!", ephemeral: true });
                 return;
             }
 
@@ -89,10 +90,10 @@ module.exports = {
                     counter++;
                 }
             }
-            await interaction.reply({ embeds: [embed] });
+            await interaction.editReply({ embeds: [embed] });
         } catch (error) {
             console.error('Error fetching device:', error);
-            await interaction.reply({ content: 'An error occurred while fetching the devices. Please try again later.', ephemeral: true });
+            await interaction.editReply({ content: 'An error occurred while fetching the devices. Please try again later.', ephemeral: true });
         }
     },
 };

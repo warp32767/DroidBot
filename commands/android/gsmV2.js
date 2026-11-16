@@ -1,21 +1,19 @@
-const { SlashCommandBuilder } = require('@discordjs/builders');
+const { onSelection } = require('../../handler/selection');
+const { SlashCommandBuilder } = require('discord.js');
 const { ActionRowBuilder, EmbedBuilder, AttachmentBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ComponentType, InteractionCollector } = require('discord.js');
 
-const axios = require('axios');
+const { getHtml } = require('../../handler/gsmClient');
 const cheerio = require('cheerio');
 
 async function scrapePhoneSpecs(url) {
     try {
-        const { data } = await axios.get(url, {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
-            }
-        });
+        const data = await getHtml(url);
         const $ = cheerio.load(data);
 
         const specs = {};
 
         specs.name = $('h1.specs-phone-name-title').text().trim();
+        if (!specs.name) throw new Error('GSMArena did not return a device page');
         specs.imageUrl = $('div.specs-photo-main img').attr('src');
 
         const specCategories = [
@@ -107,7 +105,13 @@ module.exports = {
             .setCustomId(interaction.id)
             .setPlaceholder('Select a model');
 
-        const results = await parseResults(device);
+        let results;
+        try {
+            results = await parseResults(device);
+        } catch (error) {
+            await interaction.editReply({ content: 'GSMArena is currently unavailable or blocking requests. Please try again later.', components: [] });
+            return;
+        }
 
         if (results.length === 0) {
             await interaction.editReply({
@@ -123,7 +127,7 @@ module.exports = {
             }
             dropdown.addOptions(
                 new StringSelectMenuOptionBuilder()
-                    .setLabel(results[i].name)
+                    .setLabel(results[i].name.slice(0, 100))
                     .setValue(results[i].link)
             );
         }
@@ -143,19 +147,23 @@ module.exports = {
                 time: 30_000,
             });
 
-            collector.on('collect', async interaction => {
-                if (!interaction.values.length) {
-                    await interaction.reply('something went VERY wrong please file an issue and contact either developer');
+            onSelection(collector, async interaction => {
+                if (!interaction.values.length || !results.slice(0, 25).some(result => result.link === interaction.values[0])) {
+                    await interaction.editReply({ content: 'Invalid selection. Please try again.', components: [] });
                     return;
                 }
 
-                handleCollectorInteraction(interaction);
+                await handleCollectorInteraction(interaction);
             });
 
             async function handleCollectorInteraction(interaction) {
                 try {
                     console.log(`values: ${interaction.values}`);
                     const specs = await scrapePhoneSpecs(interaction.values[0]);
+                    if (!specs) {
+                        await interaction.editReply({ content: 'Unable to fetch device specifications from GSMArena. Please try again later.', components: [] });
+                        return;
+                    }
                     if (specs) {
                         const embed = new EmbedBuilder()
                             .setTitle(specs.name)
@@ -166,20 +174,24 @@ module.exports = {
 
                         const excludeFields = ['GPRS', 'EDGE', '2G bands', '3G bands', '4G bands', '5G bands', 'Speed', 'CPU', 'GPU', 'NFC', 'Price', 'Video', 'Loudspeaker', '3.5mm jack', 'Radio', 'SAR', 'SAR EU', 'WLAN', 'Positioning', 'SIM', 'Card slot', 'Sensors', 'Announced', 'Features'];
                         const description = formatDescription(specs, excludeFields);
-                        embed.setDescription(description);
+                        embed.setDescription(description.slice(0, 4096) || 'No specifications available.');
 
-                        await interaction.update({
+                        await interaction.editReply({
                             components: [],
                             embeds: [embed],
                             content: '',
                         });
                     }
                 } catch (error) {
-                    console.log('Error fetching device info:', error);
+                    throw error;
                 }
             }
         } else if (results.length === 1) {
             const specs = await scrapePhoneSpecs(results[0].link);
+            if (!specs) {
+                await interaction.editReply({ content: 'Unable to fetch device specifications from GSMArena. Please try again later.', components: [] });
+                return;
+            }
             if (specs) {
                 const embed = new EmbedBuilder()
                     .setTitle(specs.name)
@@ -190,7 +202,7 @@ module.exports = {
 
                 const excludeFields = ['GPRS', 'EDGE', '2G bands', '3G bands', '4G bands', '5G bands', 'Speed', 'CPU', 'GPU', 'NFC', 'Price', 'Video', 'Loudspeaker', '3.5mm jack', 'Radio', 'SAR', 'SAR EU', 'WLAN', 'Positioning', 'SIM', 'Card slot', 'Sensors', 'Announced', 'Features'];
                 const description = formatDescription(specs, excludeFields);
-                embed.setDescription(description);
+                embed.setDescription(description.slice(0, 4096) || 'No specifications available.');
 
                 await interaction.editReply({
                     components: [],

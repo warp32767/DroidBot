@@ -32,6 +32,6 @@ module.exports = {
             embed.setFooter({ text: 'Why are you stalking the developers?' });
         }
 
-        interaction.reply({ embeds: [embed] });
+        await interaction.reply({ embeds: [embed] });
     },
 };

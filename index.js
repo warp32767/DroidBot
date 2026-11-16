@@ -1,8 +1,16 @@
-const { REST } = require("@discordjs/rest");
+// Check/install packages before requiring any third-party code.
+try {
+    require('./handler/npmDependencies').ensureDependencies();
+} catch (error) {
+    console.error(error.message);
+    process.exit(1);
+}
+
 const { Client, Collection, GatewayIntentBits, EmbedBuilder, ActivityType, AttachmentBuilder } = require("discord.js");
 const axios = require('axios');
 const fs = require('node:fs');
 const path = require('path');
+const { execFileSync } = require('node:child_process');
 const { loadEvents } = require("./handler/events");
 const { token } = require('./config.json');
 const { version } = require('./package.json');
@@ -11,6 +19,10 @@ const { deployCommands } = require("./handler/deployCommands");
 
 // Logging
 const logger = require("./handler/logger")
+// Prepare Chrome in the background; /gsm awaits this same installation if needed.
+require('./handler/gsmBrowser').ensureBrowser().catch(error => {
+    logger.error(`GSMArena browser setup failed: ${error.message}`);
+});
 
 // Create blocklist.json if it doesn't exist
 const blocklistPath = path.join(__dirname, './events/helper/blocklist.json');
@@ -20,10 +32,9 @@ if (!fs.existsSync(blocklistPath)) {
     logger.info('Created default blocklist.json');
 }
 
-const client = new Client({ intents: 46791 });
+const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent], allowedMentions: { parse: [] } });
 client.commands = new Collection();
 
-const rest = new REST({ version: "10" }).setToken(token);
 
 // load commands
 loadCommands(client);
@@ -34,6 +45,7 @@ async function checkForUpdates() {
     try {
         const commitJson = await axios.get(
             'https://api.github.com/repos/warp32767/DroidBot/commits/master',
+            { timeout: 10_000 },
         );
         const commitData = commitJson.data;
         const commit = commitData.sha;
@@ -48,9 +60,12 @@ async function checkForUpdates() {
 async function setupEmbed() {
     const remoteCommit = await checkForUpdates();
 
-    let localCommit = await fs.readFileSync('.git/refs/heads/master', 'utf8');
+    let localCommit = 'unknown';
+    try {
+        localCommit = execFileSync('git', ['rev-parse', '--short=7', 'HEAD'], { cwd: __dirname, encoding: 'utf8', timeout: 5000 }).trim();
+    } catch (error) { logger.warning(`Could not read local Git revision: ${error.message}`); }
 
-    icon = new AttachmentBuilder(`./images/droid.png`);
+    const icon = new AttachmentBuilder(path.join(__dirname, 'images/droid.png'));
     const embed = new EmbedBuilder()
         .setTitle(`DroidBot \`${version}\``)
         .setColor('#ff0000')
@@ -69,7 +84,7 @@ async function setupEmbed() {
 
     const channel = client.channels.cache.get(channelId);
     if (channel) {
-        channel.send({ embeds: [embed], files: [icon] });
+        await channel.send({ embeds: [embed], files: [icon] });
     } else {
         logger.error(`Could not find the specified channel: ${channelId}`);
     }
@@ -78,7 +93,7 @@ async function setupEmbed() {
 
 let guildIds = [];
 
-client.on("clientReady", async () => {
+async function initialize() {
     logger.info(`Logged in as ${client.user.tag}!`);
 
     function updateStatus() {
@@ -118,16 +133,23 @@ client.on("clientReady", async () => {
     // I forgot this lol
     setInterval(updateStatus, 10000);
 
-    await setupEmbed();
+    await setupEmbed().catch(error => logger.error(`Startup notification failed: ${error.message}`));
 
-    guildIds = await client.guilds.cache.map(guild => guild.id);
+    guildIds = client.guilds.cache.map(guild => guild.id);
     logger.info(`Connected to guilds: ${guildIds}`)
 
     await deployCommands(client, guildIds);
 
+}
+
+client.once('clientReady', () => {
+    initialize().catch(error => logger.error(`Initialization failed: ${error.stack || error.message}`));
 });
 
-// He sees everything
-client.login(token);
+client.login(token).catch(error => {
+    logger.error(`Discord login failed: ${error.message}`);
+    client.destroy();
+    process.exitCode = 1;
+});
 
 module.exports = { guildIds, client };

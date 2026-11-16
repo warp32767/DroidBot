@@ -180,9 +180,11 @@ function checkMessage(content) {
 
     const compactContent = compactText(content);
 
+    if (!Array.isArray(blocklist)) return { blocked: false };
     for (const phrase of blocklist) {
+        if (typeof phrase !== 'string') continue;
         const compactB = compactPhrase(phrase);
-        if (compactContent.includes(compactB)) {
+        if (compactB && compactContent.includes(compactB)) {
             return { blocked: true, match: phrase };
         }
     }

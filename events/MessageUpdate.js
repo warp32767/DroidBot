@@ -7,7 +7,7 @@ const MOD_LOG_CHANNEL_ID = config.log_channel;
 module.exports = {
     name: Events.MessageUpdate,
     async execute(oldMessage, newMessage) {
-        if (newMessage.author?.bot || newMessage.system) return;
+        if (!newMessage.inGuild() || !newMessage.author || newMessage.author.bot || newMessage.system) return;
 
         const beforeEdit = oldMessage.content ?? '';
         const flaggedMessage = newMessage.content ?? '';

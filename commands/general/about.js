@@ -1,8 +1,8 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { version } = require('../../package.json');
 const os = require('os'); // Import the os module
 
 module.exports = {
-    const: { version } = require('../../package.json'),
     data: new SlashCommandBuilder()
         .setName('about')
         .setDescription('DroidBot\'s information'),

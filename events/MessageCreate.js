@@ -7,7 +7,7 @@ const MOD_LOG_CHANNEL_ID = config.log_channel;
 module.exports = {
     name: Events.MessageCreate,
     async execute(message) {
-        if (message.author.bot || message.system) return;
+        if (!message.inGuild() || message.author?.bot || message.system) return;
 
         const result = checkMessage(message.content);
         if (!result.blocked) return;

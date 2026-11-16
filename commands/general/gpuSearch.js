@@ -10,6 +10,7 @@ function sleep(ms) {
 async function fetchWithRetry(url, retries = 5, delayMs = 3000) {
     for (let attempt = 1; attempt <= retries; attempt++) {
         const response = await axios.get(url, {
+      timeout: 15_000,
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.6788.76 Safari/537.36',
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
@@ -25,8 +26,8 @@ async function fetchWithRetry(url, retries = 5, delayMs = 3000) {
         const bodyText = $('body').text().toLowerCase();
 
         const looksLikeBotCheck =
-            bodyText.includes('Automated bot check in progress') ||
-            bodyText.includes('This should only take a few seconds.')
+            bodyText.includes('automated bot check in progress') ||
+            bodyText.includes('this should only take a few seconds.')
 
         if (!looksLikeBotCheck) {
             return response;
@@ -94,6 +95,8 @@ async function scrapeGpuList(query) {
 }
 
 async function scrapeGpuDetails(url) {
+  const target = new URL(url);
+  if (target.origin !== 'https://www.techpowerup.com' || !target.pathname.startsWith('/gpu-specs/')) throw new Error('Unsupported specifications URL');
     const cacheKey = `gpu_detail:${url}`;
     const cachedDetails = cache.get(cacheKey);
     if (cachedDetails) {
@@ -104,6 +107,7 @@ async function scrapeGpuDetails(url) {
     console.log('[gpuSearch] Fetching GPU details from:', url);
 
     const response = await axios.get(url, {
+      timeout: 15_000,
         headers: {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.6788.76 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',

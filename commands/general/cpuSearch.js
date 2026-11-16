@@ -15,6 +15,7 @@ async function scrapeCpuList(query) {
   const url = `https://www.techpowerup.com/cpu-specs/?q=${encodeURIComponent(query)}`;
   try {
     const response = await axios.get(url, {
+      timeout: 15_000,
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.6788.76 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml'
@@ -43,6 +44,8 @@ async function scrapeCpuList(query) {
 
 // Fetches the CPU details from a given url and caches the details for future requests
 async function scrapeCpuDetails(url) {
+  const target = new URL(url);
+  if (target.origin !== 'https://www.techpowerup.com' || !target.pathname.startsWith('/cpu-specs/')) throw new Error('Unsupported specifications URL');
   const cacheKey = `cpu_detail:${url}`;
   const cachedDetails = cache.get(cacheKey);
   if (cachedDetails) {
@@ -52,6 +55,7 @@ async function scrapeCpuDetails(url) {
 
   try {
     const response = await axios.get(url, {
+      timeout: 15_000,
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.6788.76 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml'
@@ -77,7 +81,7 @@ async function scrapeCpuDetails(url) {
     return specs;
   } catch (error) {
     console.error('Error scraping CPU details:', error);
-    return {};
+    return null;
   }
 }
 

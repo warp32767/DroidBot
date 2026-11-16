@@ -1,4 +1,5 @@
-const { SlashCommandBuilder } = require('@discordjs/builders');
+const { onSelection } = require('../../handler/selection');
+const { SlashCommandBuilder } = require('discord.js');
 const { ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ComponentType, EmbedBuilder } = require('discord.js');
 
 function formatSoCDetails(specs) {
@@ -79,7 +80,7 @@ module.exports = {
                     .setTitle(selectedName)
                     .setURL(url)
                     .setColor(0x00AE86)
-                    .setDescription(await formatSoCDetails(specs))
+                    .setDescription(formatSoCDetails(specs).slice(0, 4096) || 'No specifications available.')
                     .setFooter({ text: 'Powered by PhoneDB' });
                 
                 const img = await getSocImage(results[0].link);
@@ -113,7 +114,7 @@ module.exports = {
             
                 dropdown.addOptions(
                     new StringSelectMenuOptionBuilder()
-                        .setLabel(result.name)
+                        .setLabel(result.name.slice(0, 100))
                         .setValue(i.toString())
                 );
             }
@@ -131,8 +132,9 @@ module.exports = {
                 time: 30_000,
             });
 
-            collector.on('collect', async (interaction) => {
+            onSelection(collector, async (interaction) => {
                 const selectedUrl = interaction.values[0];
+                if (!/^\d+$/.test(selectedUrl) || !results.slice(0, 25)[Number(selectedUrl)]) throw new Error('Invalid selection');
                 const url = results[Number(selectedUrl)].link;
                 const specs = await scrapeSoCDetails(results[Number(selectedUrl)].link);
                 const selectedName = results[Number(selectedUrl)].name;
@@ -142,7 +144,7 @@ module.exports = {
                         .setTitle(selectedName)
                         .setURL(url)
                         .setColor(0x00AE86)
-                        .setDescription(await formatSoCDetails(specs))
+                        .setDescription(formatSoCDetails(specs).slice(0, 4096) || 'No specifications available.')
                         .setFooter({ text: 'Powered by PhoneDB' });
                     
                     const img = await getSocImage(results[Number(selectedUrl)].link);
@@ -150,13 +152,13 @@ module.exports = {
                         await embed.setThumbnail(img);
                     }
 
-                    await interaction.update({
+                    await interaction.editReply({
                         components: [],
                         embeds: [embed],
                         content: '',
                     });
                 } else {
-                    await interaction.update({
+                    await interaction.editReply({
                         components: [],
                         content: 'Error fetching CPU value.',
                     });

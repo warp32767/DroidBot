@@ -19,7 +19,6 @@ async function scrapeSocList(query) {
     const cached = searchCache.get(query);
     if (cached) return cached;
 
-    process.env['NODE_TLS_REJECT_UNAUTHORIZED'] = 0;
     const url = "http://phonedb.net/index.php?m=processor&s=list";
     const bodyFormData = new URLSearchParams();
     bodyFormData.append('search_exp', query);
@@ -28,7 +27,7 @@ async function scrapeSocList(query) {
     const response = await axiosInstance({
         method: "post",
         url,
-        params: bodyFormData,
+        data: bodyFormData,
     });
 
     const html = response.data;
@@ -37,6 +36,7 @@ async function scrapeSocList(query) {
 
     $('.content_block_title a').each((index, element) => {
         const title = $(element).attr('title');
+        if (!title || !$(element).attr('href')) return;
         const name = title.replace('  ', ' ');
         const href = $(element).attr('href');
         const link = "http://phonedb.net/" + href;

@@ -1,4 +1,5 @@
-const { SlashCommandBuilder } = require('@discordjs/builders');
+const { onSelection } = require('../../handler/selection');
+const { SlashCommandBuilder } = require('discord.js');
 const { ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ComponentType, EmbedBuilder } = require('discord.js');
 const { scrapeCpuList, scrapeCpuDetails } = require('./cpuSearch');
 
@@ -84,12 +85,12 @@ module.exports = {
         if (results.length === 1) {
             const specs = await scrapeCpuDetails(results[0].link);
 
-            if (specs) {
+            if (specs && Object.values(specs).some(details => Object.keys(details).length)) {
                 const embed = new EmbedBuilder()
                     .setTitle(results[0].name)
                     .setURL(results[0].link)
                     .setColor(0x00AE86)
-                    .setDescription(formatCpuDetails(specs, ['Physical', 'Processor', 'Performance', 'Architecture', 'Core Config', 'Cache']))
+                    .setDescription(formatCpuDetails(specs, ['Physical', 'Processor', 'Performance', 'Architecture', 'Core Config', 'Cache']).slice(0, 4096) || 'No specifications available.')
                     .setFooter({ text: 'Powered by TechPowerUp' });
 
                 await interaction.editReply({
@@ -111,7 +112,7 @@ module.exports = {
         results.slice(0, 25).forEach(result => {
             dropdown.addOptions(
                 new StringSelectMenuOptionBuilder()
-                    .setLabel(result.name)
+                    .setLabel(result.name.slice(0, 100))
                     .setValue(result.link)
             );
         });
@@ -129,26 +130,27 @@ module.exports = {
             time: 30_000,
         });
 
-        collector.on('collect', async (selectInteraction) => {
+        onSelection(collector, async (selectInteraction) => {
             const selectedUrl = selectInteraction.values[0];
+            if (!results.slice(0, 25).some(result => result.link === selectedUrl)) throw new Error('Invalid selection');
             const specs = await scrapeCpuDetails(selectedUrl);
             const selectedName = results.find(result => result.link === selectedUrl).name;
 
-            if (specs) {
+            if (specs && Object.values(specs).some(details => Object.keys(details).length)) {
                 const embed = new EmbedBuilder()
                     .setTitle(selectedName)
                     .setURL(selectedUrl)
                     .setColor(0x00AE86)
-                    .setDescription(formatCpuDetails(specs, ['Physical', 'Processor', 'Performance', 'Architecture', 'Core Config', 'Cache']))
+                    .setDescription(formatCpuDetails(specs, ['Physical', 'Processor', 'Performance', 'Architecture', 'Core Config', 'Cache']).slice(0, 4096) || 'No specifications available.')
                     .setFooter({ text: 'Powered by TechPowerUp' });
 
-                await selectInteraction.update({
+                await selectInteraction.editReply({
                     components: [],
                     embeds: [embed],
                     content: '',
                 });
             } else {
-                await selectInteraction.update({
+                await selectInteraction.editReply({
                     components: [],
                     content: 'Error fetching CPU details.',
                 });

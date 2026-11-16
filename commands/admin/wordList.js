@@ -1,11 +1,13 @@
-const { SlashCommandBuilder } = require('@discordjs/builders');
+const { SlashCommandBuilder } = require('discord.js');
 const { EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
+const { normalize } = require('../../events/helper/filterTool');
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('wordlist')
+        .setDMPermission(false)
         .setDescription('Manage the blocklist')
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)  // Only admins can see/use this command
         .addSubcommand(subcommand =>
@@ -29,6 +31,10 @@ module.exports = {
                 .setName('list')
                 .setDescription('List all phrases in the blocklist')),
     async execute(interaction) {
+        if (!interaction.inGuild() || !interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
+            await interaction.reply({ content: 'Administrator permission is required.', ephemeral: true });
+            return;
+        }
         const subcommand = interaction.options.getSubcommand();
         const blocklistPath = path.resolve(__dirname, '../../events/helper/blocklist.json');
 
@@ -38,6 +44,10 @@ module.exports = {
 
             if (subcommand === 'add') {
                 const phrase = interaction.options.getString('phrase').trim();
+                if (!normalize(phrase).replace(/\s/g, '')) {
+                    await interaction.reply({ content: 'Enter a non-empty phrase.', ephemeral: true });
+                    return;
+                }
                 if (blocklist.includes(phrase)) {
                     await interaction.reply({ content: `Phrase "${phrase}" is already in the blocklist.`, ephemeral: true });
                     return;
@@ -64,7 +74,7 @@ module.exports = {
                 }
                 const embed = new EmbedBuilder()
                     .setTitle('Blocklist Phrases')
-                    .setDescription(blocklist.map((phrase, index) => `${index + 1}. ${phrase}`).join('\n'))
+                    .setDescription(blocklist.map((phrase, index) => `${index + 1}. ${phrase}`).join('\n').slice(0, 4096))
                     .setColor(0x0099ff);
                 await interaction.reply({ embeds: [embed], ephemeral: true });
             }

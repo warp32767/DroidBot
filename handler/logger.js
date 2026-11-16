@@ -1,3 +1,5 @@
+const path = require('node:path');
+require('node:fs').mkdirSync(path.resolve(__dirname, '../logs'), { recursive: true });
 const Logger = require("@ptkdev/logger");
 
 const options = {
@@ -15,8 +17,8 @@ const options = {
 		encoding: "utf8",
 	},
 	path: {
-		debug_log: "./logs/debug.log",
-		error_log: "./logs/errors.log",
+		debug_log: path.resolve(__dirname, '../logs/debug.log'),
+		error_log: path.resolve(__dirname, '../logs/errors.log'),
 	},
 };
 

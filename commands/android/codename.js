@@ -16,6 +16,7 @@ module.exports = {
                 .setRequired(true)
         ),
     async execute(interaction) {
+        await interaction.deferReply();
         const brand2 = interaction.options.getString('brand');
         const brand = await brand2.replace(/[&\/\\#,()@$~%.'":*?<>{}`]/g, '');
         const device2 = interaction.options.getString('device');
@@ -24,7 +25,7 @@ module.exports = {
         let counter = 0;
 
         try {
-            const json = await axios.get(`${url}`);
+            const json = await axios.get(url, { timeout: 15_000 });
             const jsonData = json.data;
 
             const lowerCaseKeys = Object.keys(jsonData).reduce((acc, key) => {
@@ -34,7 +35,7 @@ module.exports = {
 
             const brandJson = jsonData[lowerCaseKeys[`${brand}`.toLowerCase()]];
             if (!brandJson) {
-                await interaction.reply({ content: `No data found for brand!`, ephemeral: false });
+                await interaction.editReply({ content: `No data found for brand!`, ephemeral: false });
                 return;
             }
 
@@ -47,7 +48,7 @@ module.exports = {
                 .filter((value, index, self) => self.findIndex(item => item.name === value.name && item.device === value.device) === index);
 
             if (uniqueDevices.length === 0) {
-                await interaction.reply({ content: `No codenames found!`, ephemeral: false });
+                await interaction.editReply({ content: `No codenames found!`, ephemeral: false });
                 return;
             }
 
@@ -62,10 +63,10 @@ module.exports = {
                 }
             });
 
-            await interaction.reply({ embeds: [embed] });
+            await interaction.editReply({ embeds: [embed] });
         } catch (error) {
             console.error('Error fetching codenames:', error);
-            await interaction.reply({ content: 'An error occurred while fetching the codenames. Please try again later.', ephemeral: true });
+            await interaction.editReply({ content: 'An error occurred while fetching the codenames. Please try again later.', ephemeral: true });
         }
     },
 };

@@ -1,8 +1,11 @@
-const { SlashCommandBuilder } = require(`@discordjs/builders`);
+const { SlashCommandBuilder } = require(`discord.js`);
 const { EmbedBuilder, ActivityType, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ComponentType } = require(`discord.js`);
-const simpleGit = require(`simple-git`);
+const { simpleGit } = require(`simple-git`);
 const path = require(`path`);
-const { exec } = require(`child_process`);
+const { execFile } = require('node:child_process');
+const { promisify } = require('node:util');
+const run = promisify(execFile);
+const pm2Path = require.resolve('pm2/bin/pm2');
 const fs = require(`fs`);
 const logger = require(`../../handler/logger`);
 const config = require('../../config.json');
@@ -90,32 +93,34 @@ module.exports = {
             });
 
             const filter = i => i.user.id === interaction.user.id;
-            const collector = followUpMessage.createMessageComponentCollector({ filter, componentType: ComponentType.StringSelect });
+            const collector = followUpMessage.createMessageComponentCollector({ filter, componentType: ComponentType.StringSelect, time: 30_000, max: 1 });
 
             collector.on(`collect`, async i => {
-                if (i.values[0] === `confirm`) {
-                    const rootDir = path.resolve(__dirname, `../../`);
-                    const git = simpleGit(rootDir);
+                try {
+                    await i.deferUpdate();
+                    if (i.values[0] === `confirm`) {
+                        const rootDir = path.resolve(__dirname, `../../`);
+                        const git = simpleGit(rootDir);
 
-                    try {
-                        const pullResult = await git.pull();
+                        const pullResult = await git.pull(['--ff-only']);
                         if (pullResult.summary.changes === 0) {
-                            await i.update({ content: `Repository is already up to date.`, components: [], ephemeral: true });
+                            await i.editReply({ content: `Repository is already up to date.`, components: [], ephemeral: true });
                         } else {
-                            await i.update({ content: `Repository updated successfully.\n\n${JSON.stringify(pullResult, null, 2)}`, components: [], ephemeral: true });
+                            await i.editReply({ content: `Repository updated. Installing dependencies before restarting...`, components: [], ephemeral: true });
 
+                            await run('npm', ['install'], { cwd: rootDir, timeout: 600_000 });
                             for (const userId of notifyUserIds) {
-                                const user = await interaction.client.users.fetch(userId);
-                                await user.send(`${formatTimestamp()} The bot has been updated and will restart shortly.`);
+                                const user = await interaction.client.users.fetch(userId).catch(error => { logger.warning(error.message); return null; });
+                                if (user) await user.send(`${formatTimestamp()} The bot has been updated and will restart shortly.`).catch(error => logger.warning(error.message));
                             }
-                            exec("npm i", { cwd: rootDir });
-                            exec(`npx pm2 restart droidbot`);
+                            await run(process.execPath, [pm2Path, 'restart', 'droidbot'], { cwd: rootDir, timeout: 30_000 });
                         }
-                    } catch (error) {
-                        await i.update({ content: `Error pulling repository files: ${error.message}`, components: [], ephemeral: true });
+                    } else {
+                        await i.editReply({ content: `Update canceled.`, components: [], ephemeral: true });
                     }
-                } else {
-                    await i.update({ content: `Update canceled.`, components: [], ephemeral: true });
+                } catch (error) {
+                    logger.error(`Update failed: ${error.message}`);
+                    await i.editReply({ content: `Update failed: ${error.message.slice(0, 1500)}`, components: [] }).catch(replyError => logger.error(replyError.message));
                 }
             });
 
@@ -155,11 +160,11 @@ module.exports = {
             await interaction.reply({ content: `Restarting bot...`, ephemeral: true });
 
             /*for (const userId of notifyUserIds) {
-                const user = await interaction.client.users.fetch(userId);
+                const user = await interaction.client.users.fetch(userId).catch(error => { logger.warning(error.message); return null; });
                 await user.send(`${formatTimestamp()} The bot is being restarted.`);
             }*/
 
-            exec(`npx pm2 stop droidbot`);
+            await run(process.execPath, [pm2Path, 'restart', 'droidbot'], { cwd: path.resolve(__dirname, '../../'), timeout: 30_000 });
             return;
         }
 
@@ -170,7 +175,7 @@ module.exports = {
 
             const getPublicIp = () => {
                 return new Promise((resolve, reject) => {
-                    https.get('https://api.ipify.org?format=json', (res) => {
+                    const request = https.get('https://api.ipify.org?format=json', (res) => {
                         let data = '';
                         res.on('data', chunk => data += chunk);
                         res.on('end', () => {
@@ -183,6 +188,7 @@ module.exports = {
                             }
                         });
                     }).on('error', reject);
+                    request.setTimeout(15_000, () => request.destroy(new Error('IP service timed out')));
                 });
             };
 
@@ -226,26 +232,13 @@ module.exports = {
 
             const rootDir = path.resolve(__dirname, `../../`);
 
-            exec(`npm i`, { cwd: rootDir }, async (error, stdout, stderr) => {
-                let resultMessage;
-                if (error) {
-                    resultMessage = `npm install failed:\n\`\`\`${error.message}\`\`\`\nStderr:\n\`\`\`${stderr}\`\`\``;
-                } else {
-                    resultMessage = `npm install completed successfully.\nStdout:\n\`\`\`${stdout}\`\`\``;
-                }
-
-                // Truncate if too long for Discord embed limits
-                if (resultMessage.length > 4000) {
-                    resultMessage = resultMessage.slice(0, 4000) + `\n... (truncated)`;
-                }
-
-                const embed = new EmbedBuilder()
-                    .setTitle(`npm install Result`)
-                    .setDescription(resultMessage)
-                    .setColor(error ? 0xFF0000 : 0x00FF00);
-
-                await interaction.followUp({ embeds: [embed], ephemeral: true });
-            });
+            try {
+                await run('npm', ['install'], { cwd: rootDir, timeout: 600_000, maxBuffer: 1024 * 1024 });
+                await interaction.editReply({ content: 'npm install completed successfully.' });
+            } catch (error) {
+                logger.error(`npm install failed: ${error.message}`);
+                await interaction.editReply({ content: 'npm install failed. Check the server logs for details.' });
+            }
 
             return;
         }
