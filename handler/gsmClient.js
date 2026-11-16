@@ -1,5 +1,6 @@
 const axios = require('axios');
 const path = require('path');
+const { mkdir } = require('node:fs/promises');
 const { launchBrowser } = require('./gsmBrowser');
 const { setTimeout: delay } = require('node:timers/promises');
 
@@ -62,6 +63,7 @@ function createGsmClient({
         if (refreshPromise) return refreshPromise;
         refreshPromise = (async () => {
             let browser;
+            let page;
             let stage = 'launching Chrome';
             try {
                 browser = await launch({
@@ -71,7 +73,7 @@ function createGsmClient({
                     timeout: 30_000, protocolTimeout: 30_000,
                 });
                 stage = 'opening a browser page';
-                const page = await browser.newPage();
+                page = await browser.newPage();
                 await page.setUserAgent({ userAgent: (await browser.userAgent()).replace('HeadlessChrome/', 'Chrome/') });
                 await page.setExtraHTTPHeaders({ 'Accept-Language': 'en-US,en;q=0.9' });
                 stage = 'navigating to GSMArena';
@@ -97,6 +99,16 @@ function createGsmClient({
                 };
                 return session;
             } catch (error) {
+                if (page && stage.startsWith('waiting for device content')) {
+                    const screenshotPath = path.resolve(__dirname, '../logs/gsm-turnstile-failure.png');
+                    try {
+                        await mkdir(path.dirname(screenshotPath), { recursive: true });
+                        await page.screenshot({ path: screenshotPath, timeout: 5_000 });
+                        error.message += ` Screenshot saved to ${screenshotPath}.`;
+                    } catch (screenshotError) {
+                        error.message += ` Screenshot capture failed: ${screenshotError.message}.`;
+                    }
+                }
                 const failure = new Error(`GSMArena browser session failed while ${stage}: ${error.message}`, { cause: error });
                 // Installation, shared-library, sandbox, and profile-lock errors
                 // will not improve by launching the same configuration again.
