@@ -8,7 +8,22 @@ const run = promisify(execFile);
 const pm2Path = require.resolve('pm2/bin/pm2');
 const fs = require(`fs`);
 const logger = require(`../../handler/logger`);
-const config = require('../../config.json');
+const rootDir = path.resolve(__dirname, '../../');
+let maintenanceBusy = false;
+
+async function maintain(action) {
+    if (maintenanceBusy) throw new Error('Another update, install, or restart is already running.');
+    maintenanceBusy = true;
+    try {
+        return await action();
+    } finally {
+        maintenanceBusy = false;
+    }
+}
+
+async function restartBot() {
+    await run(process.execPath, [pm2Path, 'restart', 'droidbot'], { cwd: rootDir, timeout: 30_000 });
+}
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -99,22 +114,21 @@ module.exports = {
                 try {
                     await i.deferUpdate();
                     if (i.values[0] === `confirm`) {
-                        const rootDir = path.resolve(__dirname, `../../`);
-                        const git = simpleGit(rootDir);
-
-                        const pullResult = await git.pull(['--ff-only']);
-                        if (pullResult.summary.changes === 0) {
-                            await i.editReply({ content: `Repository is already up to date.`, components: [], ephemeral: true });
-                        } else {
-                            await i.editReply({ content: `Repository updated. Installing dependencies before restarting...`, components: [], ephemeral: true });
-
-                            await run('npm', ['install'], { cwd: rootDir, timeout: 600_000 });
-                            for (const userId of notifyUserIds) {
-                                const user = await interaction.client.users.fetch(userId).catch(error => { logger.warning(error.message); return null; });
-                                if (user) await user.send(`${formatTimestamp()} The bot has been updated and will restart shortly.`).catch(error => logger.warning(error.message));
-                            }
-                            await run(process.execPath, [pm2Path, 'restart', 'droidbot'], { cwd: rootDir, timeout: 30_000 });
-                        }
+                        await maintain(async () => {
+                            const git = simpleGit(rootDir);
+                            const before = await git.revparse(['HEAD']);
+                            await git.pull(['--ff-only']);
+                            const changed = before !== await git.revparse(['HEAD']);
+                            await i.editReply({
+                                content: changed ? 'Repository updated. Restarting bot...' : 'Repository is already up to date. Restarting bot...',
+                                components: [],
+                            });
+                            await Promise.allSettled(notifyUserIds.map(async userId => {
+                                const user = await interaction.client.users.fetch(userId);
+                                await user.send(`${formatTimestamp()} Repository ${changed ? 'updated' : 'checked'}; the bot will restart shortly.`);
+                            }));
+                            await restartBot();
+                        });
                     } else {
                         await i.editReply({ content: `Update canceled.`, components: [], ephemeral: true });
                     }
@@ -158,13 +172,12 @@ module.exports = {
 
         if (subcommand === `restart_bot`) {
             await interaction.reply({ content: `Restarting bot...`, ephemeral: true });
-
-            /*for (const userId of notifyUserIds) {
-                const user = await interaction.client.users.fetch(userId).catch(error => { logger.warning(error.message); return null; });
-                await user.send(`${formatTimestamp()} The bot is being restarted.`);
-            }*/
-
-            await run(process.execPath, [pm2Path, 'restart', 'droidbot'], { cwd: path.resolve(__dirname, '../../'), timeout: 30_000 });
+            try {
+                await maintain(restartBot);
+            } catch (error) {
+                logger.error(`Restart failed: ${error.message}`);
+                await interaction.editReply({ content: `Restart failed: ${error.message.slice(0, 1500)}` });
+            }
             return;
         }
 
@@ -230,10 +243,8 @@ module.exports = {
         if (subcommand === `install`) {
             await interaction.deferReply({ ephemeral: true });
 
-            const rootDir = path.resolve(__dirname, `../../`);
-
             try {
-                await run('npm', ['install'], { cwd: rootDir, timeout: 600_000, maxBuffer: 1024 * 1024 });
+                await maintain(() => run('npm', ['install'], { cwd: rootDir, timeout: 600_000, maxBuffer: 1024 * 1024 }));
                 await interaction.editReply({ content: 'npm install completed successfully.' });
             } catch (error) {
                 logger.error(`npm install failed: ${error.message}`);

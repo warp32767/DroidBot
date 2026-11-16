@@ -1,11 +1,3 @@
-// Check/install packages before requiring any third-party code.
-try {
-    require('./handler/npmDependencies').ensureDependencies();
-} catch (error) {
-    console.error(error.message);
-    process.exit(1);
-}
-
 const { Client, Collection, GatewayIntentBits, EmbedBuilder, ActivityType, AttachmentBuilder } = require("discord.js");
 const axios = require('axios');
 const fs = require('node:fs');
