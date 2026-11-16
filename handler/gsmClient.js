@@ -10,13 +10,27 @@ const PAGE_SELECTOR = '#review-body .makers, h1.specs-phone-name-title';
 async function waitForDeviceContent(page, timeout) {
     const controller = new AbortController();
     let checkboxError;
-    const checkboxTimeout = Math.max(1_000, timeout - 3_000);
+    let clicked = false;
+    const checkboxDeadline = Date.now() + Math.max(1_000, timeout - 3_000);
     // A frame and its spinner can exist well before the checkbox is ready.
     const checkboxAttempt = (async () => {
-        const frame = await page.waitForFrame(frame => frame.url().startsWith('https://challenges.cloudflare.com/'), {
-            timeout: checkboxTimeout, signal: controller.signal,
-        });
-        await frame.locator('::-p-aria([role="checkbox"])').setTimeout(checkboxTimeout).click({ signal: controller.signal });
+        while (!controller.signal.aborted && Date.now() < checkboxDeadline) {
+            try {
+                const frame = await page.waitForFrame(frame => frame.url().startsWith('https://challenges.cloudflare.com/'), {
+                    timeout: Math.max(1, checkboxDeadline - Date.now()), signal: controller.signal,
+                });
+                await frame.locator('::-p-aria([role="checkbox"])')
+                    .setTimeout(Math.max(1, Math.min(5_000, checkboxDeadline - Date.now())))
+                    .click({ signal: controller.signal });
+                clicked = true;
+                return;
+            } catch (error) {
+                if (controller.signal.aborted) return;
+                checkboxError = error;
+                // Turnstile can replace its frame while the spinner is running.
+                await delay(250, undefined, { signal: controller.signal });
+            }
+        }
     })().catch(error => {
         if (!controller.signal.aborted) checkboxError = error;
     });
@@ -26,7 +40,7 @@ async function waitForDeviceContent(page, timeout) {
         await page.waitForSelector(PAGE_SELECTOR, { timeout });
     } catch (error) {
         const title = await page.title().catch(() => 'unknown');
-        throw new Error(`Device content did not appear within ${timeout / 1000}s; page title: ${JSON.stringify(title)}.${checkboxError ? ` Checkbox interaction: ${checkboxError.message}` : ''}`, { cause: error });
+        throw new Error(`Device content did not appear within ${timeout / 1000}s; page title: ${JSON.stringify(title)}. Checkbox: ${clicked ? 'clicked; verification did not finish' : 'not available (widget may still be verifying)'}.${!clicked && checkboxError ? ` Last interaction error: ${checkboxError.message}` : ''}`, { cause: error });
     } finally {
         controller.abort();
         await checkboxAttempt;
@@ -64,6 +78,7 @@ function createGsmClient({
         refreshPromise = (async () => {
             let browser;
             let page;
+            const resourceErrors = new Set();
             let stage = 'launching Chrome';
             try {
                 browser = await launch({
@@ -74,14 +89,26 @@ function createGsmClient({
                 });
                 stage = 'opening a browser page';
                 page = await browser.newPage();
-                await page.setUserAgent({ userAgent: (await browser.userAgent()).replace('HeadlessChrome/', 'Chrome/') });
+                const recordResourceError = (url, reason) => {
+                    const host = new URL(url).hostname;
+                    if (resourceErrors.size < 10 && (host === 'challenges.cloudflare.com' || host.endsWith('.challenges.cloudflare.com') || host === 'www.gsmarena.com')) {
+                        resourceErrors.add(`${host}: ${reason}`);
+                    }
+                };
+                page.on('requestfailed', request => recordResourceError(request.url(), request.failure()?.errorText || 'network failure'));
+                page.on('response', response => {
+                    // PAT 401 responses are a normal challenge fallback.
+                    if (response.status() >= 400 && response.status() !== 401) recordResourceError(response.url(), `HTTP ${response.status()}`);
+                });
+                // Keep Chrome's native User-Agent and Client Hints together.
+                // Axios receives that exact User-Agent after verification.
                 await page.setExtraHTTPHeaders({ 'Accept-Language': 'en-US,en;q=0.9' });
                 stage = 'navigating to GSMArena';
                 const response = await page.goto(url.href, { waitUntil: 'domcontentloaded', timeout: 30_000 });
                 stage = `waiting for device content (HTTP ${response?.status() ?? 'unknown'})`;
                 // Wait for actual content, rather than caching a challenge page as an empty result.
                 // Visible mode allows an operator to complete an interactive check locally.
-                await waitForDeviceContent(page, headless ? 30_000 : 120_000);
+                await waitForDeviceContent(page, headless ? 60_000 : 120_000);
                 stage = 'reading browser session cookies';
                 const cookies = await browser.defaultBrowserContext().cookies();
                 const userAgent = await page.evaluate(() => navigator.userAgent);
@@ -99,6 +126,7 @@ function createGsmClient({
                 };
                 return session;
             } catch (error) {
+                if (resourceErrors.size) error.message += ` Resource failures: ${[...resourceErrors].join('; ')}.`;
                 if (page && stage.startsWith('waiting for device content')) {
                     const screenshotPath = path.resolve(__dirname, '../logs/gsm-turnstile-failure.png');
                     try {
