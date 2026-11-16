@@ -11,10 +11,6 @@ const { deployCommands } = require("./handler/deployCommands");
 
 // Logging
 const logger = require("./handler/logger")
-// Prepare Chrome in the background; /gsm awaits this same installation if needed.
-require('./handler/gsmBrowser').ensureBrowser().catch(error => {
-    logger.error(`GSMArena browser setup failed: ${error.message}`);
-});
 
 // Create blocklist.json if it doesn't exist
 const blocklistPath = path.join(__dirname, './events/helper/blocklist.json');
